@@ -57,7 +57,7 @@ require_once SCS_PLUGIN_DIR . 'includes/utilities/functions.php';
 /**
  * Iniciar el plugin cuando todos los plugins estén cargados
  */
-add_action('plugins-loaded', 'scs-init-plugin');
+add_action('plugins-loaded', 'scs_init_plugin', 20);
 
 /**
  * Inicializa el plugin principal
@@ -89,7 +89,7 @@ function scs_activate_plugin()
 /**
  * Código para ejecutar durante la desactivación del plugin
  */
-register_deactivation_hook(__FILE__, 'scs_deactiva_e-plugin');
+register_deactivation_hook(__FILE__, 'scs_deactivate_plugin');
 function scs_deactivate_plugin()
 {
     // Limpiar caché y realizar otras tareas de limpieza
