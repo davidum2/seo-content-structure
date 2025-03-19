@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Plugin Name: SEO Content
+ * Plugin Name: SEO Content Structure
  * Plugin URI: https://ejemplo.com/seo-content-structure
  * Description: Sistema avanzado para crear tipos de contenido personalizados con campos customizables y estructuras JSON-LD para SEO.
  * Version: 1.0.0
@@ -19,6 +19,12 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// Función de utilidad para logs
+function scs_log($message)
+{
+    error_log('SCS Debug: ' . $message);
+}
+
 // Definir constantes del plugin
 define('SCS_VERSION', '1.0.0');
 define('SCS_PLUGIN_DIR', plugin_dir_path(__FILE__));
@@ -26,245 +32,287 @@ define('SCS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('SCS_PLUGIN_BASENAME', plugin_basename(__FILE__));
 define('SCS_PLUGIN_FILE', __FILE__);
 
-// Cargar interfaces esenciales
-require_once SCS_PLUGIN_DIR . 'includes/core/interfaces/interface-registrable.php';
-require_once SCS_PLUGIN_DIR . 'includes/core/interfaces/interface-fieldable.php';
-require_once SCS_PLUGIN_DIR . 'includes/core/interfaces/interface-renderable.php';
+scs_log('Plugin inicializándose - constantes definidas');
+scs_log('SCS_PLUGIN_DIR: ' . SCS_PLUGIN_DIR);
 
-// Cargar clases base
-require_once SCS_PLUGIN_DIR . 'includes/core/class-loader.php';
-require_once SCS_PLUGIN_DIR . 'includes/core/class-i18n.php';
-require_once SCS_PLUGIN_DIR . 'includes/core/class-plugin.php';
+/**
+ * Función para autocargar las clases del plugin
+ */
+spl_autoload_register(function ($class) {
+    // Prefijo del namespace del plugin
+    $prefix = 'SEOContentStructure\\';
 
-// Cargar clases de campos
-require_once SCS_PLUGIN_DIR . 'includes/fields/abstract_class_field.php';
-require_once SCS_PLUGIN_DIR . 'includes/fields/class_field_factory.php';
-require_once SCS_PLUGIN_DIR . 'includes/fields/class_text_field.php';
-require_once SCS_PLUGIN_DIR . 'includes/fields/class_text_area_field.php';
-require_once SCS_PLUGIN_DIR . 'includes/fields/class_number_field.php';
-require_once SCS_PLUGIN_DIR . 'includes/fields/class_select_field.php';
-require_once SCS_PLUGIN_DIR . 'includes/fields/class_radio_field.php';
-require_once SCS_PLUGIN_DIR . 'includes/fields/class_select_checkox_field.php';
-require_once SCS_PLUGIN_DIR . 'includes/fields/class_image_field.php';
-require_once SCS_PLUGIN_DIR . 'includes/fields/class_repeater_field.php';
+    // Verificar si la clase utiliza el prefijo del namespace
+    $len = strlen($prefix);
+    if (strncmp($prefix, $class, $len) !== 0) {
+        return;
+    }
 
-// Cargar administración
-require_once SCS_PLUGIN_DIR . 'includes/admin/class-admin-controller.php';
-require_once SCS_PLUGIN_DIR . 'includes/admin/class-field-group-controller.php';
-require_once SCS_PLUGIN_DIR . 'includes/admin/class-settings-page.php';
+    scs_log('Autoloader: Intentando cargar clase ' . $class);
 
-// Cargar tipos de contenido
-require_once SCS_PLUGIN_DIR . 'includes/post-types/abstract-class-post-type.php';
-require_once SCS_PLUGIN_DIR . 'includes/post-types/class-generic-post-type.php';
-require_once SCS_PLUGIN_DIR . 'includes/post-types/class-post-type-factory.php';
-require_once SCS_PLUGIN_DIR . 'includes/post-types/post-types/class-service-post-type.php';
+    // Obtener el nombre relativo de la clase
+    $relative_class = substr($class, $len);
+    scs_log('Autoloader: Clase relativa ' . $relative_class);
 
-// Cargar utilidades
-require_once SCS_PLUGIN_DIR . 'includes/utilities/class-validator.php';
-require_once SCS_PLUGIN_DIR . 'includes/utilities/class_helper.php';
+    // Reemplazar el namespace por la ruta de directorios y \ por /
+    $file = SCS_PLUGIN_DIR . 'includes/' . str_replace('\\', '/', $relative_class) . '.php';
+    scs_log('Autoloader: Buscando archivo ' . $file);
+
+    // Debug: Comprobar la existencia del archivo
+    if (!file_exists($file)) {
+        scs_log('Autoloader: Archivo no encontrado ' . $file . ' - Intentando alternativas');
+
+        // Intentar versiones en minúsculas del archivo
+        $lowercase_file = SCS_PLUGIN_DIR . 'includes/' . strtolower(str_replace('\\', '/', $relative_class)) . '.php';
+        scs_log('Autoloader: Intentando versión en minúsculas ' . $lowercase_file);
+
+        if (file_exists($lowercase_file)) {
+            scs_log('Autoloader: ENCONTRADO archivo en minúsculas ' . $lowercase_file);
+            require $lowercase_file;
+            return;
+        }
+
+        // Intentar versiones con class- prefijo
+        $prefix_file = SCS_PLUGIN_DIR . 'includes/' . str_replace('\\', '/', $relative_class) . '.php';
+        $prefix_file = str_replace('.php', '', $prefix_file);
+        $class_name = basename($prefix_file);
+        $dir_name = dirname($prefix_file);
+
+        scs_log('Autoloader: Nombre de clase extraído: ' . $class_name);
+        scs_log('Autoloader: Directorio: ' . $dir_name);
+
+        // Intentar con class_ prefijo
+        $class_prefix_file = $dir_name . '/class_' . $class_name . '.php';
+        scs_log('Autoloader: Intentando class_ ' . $class_prefix_file);
+
+        if (file_exists($class_prefix_file)) {
+            scs_log('Autoloader: ENCONTRADO class_ ' . $class_prefix_file);
+            require $class_prefix_file;
+            return;
+        }
+
+        // Intentar con class- prefijo
+        $class_prefix_file = $dir_name . '/class-' . $class_name . '.php';
+        scs_log('Autoloader: Intentando class- ' . $class_prefix_file);
+
+        if (file_exists($class_prefix_file)) {
+            scs_log('Autoloader: ENCONTRADO class- ' . $class_prefix_file);
+            require $class_prefix_file;
+            return;
+        }
+
+        // Intentar con abstract-class prefijo para clases abstractas
+        if (strpos($class_name, 'Abstract') !== false) {
+            $abstract_class_name = str_replace('Abstract', '', $class_name);
+            $abstract_prefix_file = $dir_name . '/abstract-class-' . strtolower($abstract_class_name) . '.php';
+            scs_log('Autoloader: Intentando abstract-class- ' . $abstract_prefix_file);
+
+            if (file_exists($abstract_prefix_file)) {
+                scs_log('Autoloader: ENCONTRADO abstract-class- ' . $abstract_prefix_file);
+                require $abstract_prefix_file;
+                return;
+            }
+        }
+
+        // Intentar con interface- prefijo para interfaces
+        if (strpos($class_name, 'Interface') !== false) {
+            $interface_name = str_replace('Interface', '', $class_name);
+            $interface_prefix_file = $dir_name . '/interface-' . strtolower($interface_name) . '.php';
+            scs_log('Autoloader: Intentando interface- ' . $interface_prefix_file);
+
+            if (file_exists($interface_prefix_file)) {
+                scs_log('Autoloader: ENCONTRADO interface- ' . $interface_prefix_file);
+                require $interface_prefix_file;
+                return;
+            }
+        }
+
+        scs_log('Autoloader: ERROR - No se pudo encontrar ninguna versión del archivo para la clase ' . $class);
+    } else {
+        scs_log('Autoloader: ENCONTRADO archivo estándar ' . $file);
+        require $file;
+    }
+});
+
+// Cargar el archivo de funciones helper
 require_once SCS_PLUGIN_DIR . 'includes/utilities/functions.php';
+scs_log('Funciones helper cargadas');
 
-// Función para renderizar la página de dashboard
-function scs_render_dashboard_page()
+/**
+ * Iniciar el plugin cuando todos los plugins estén cargados
+ */
+scs_log('Registrando gancho plugins-loaded');
+add_action('plugins-loaded', 'scs_init_plugin', 20);
+
+/**
+ * Inicializa el plugin principal
+ */
+function scs_init_plugin()
 {
+    scs_log('>>> INICIO scs_init_plugin()');
+
+    // Carga de traducciones
+    load_plugin_textdomain('seo-content-structure', false, dirname(SCS_PLUGIN_BASENAME) . '/languages');
+    scs_log('Traducciones cargadas');
+
+    // Inicializar el plugin principal
+    try {
+        scs_log('Intentando crear instancia de Plugin');
+
+        // Cargar clases principales manualmente si es necesario
+        if (!class_exists('SEOContentStructure\\Core\\Plugin')) {
+            scs_log('La clase Plugin no existe, intentando cargar manualmente');
+            $plugin_file = SCS_PLUGIN_DIR . 'includes/core/class-plugin.php';
+
+            if (file_exists($plugin_file)) {
+                scs_log('Cargando archivo class-plugin.php manualmente');
+                require_once $plugin_file;
+            } else {
+                throw new Exception("No se encontró el archivo principal class-plugin.php");
+            }
+        }
+
+        $plugin = new SEOContentStructure\Core\Plugin();
+        scs_log('Instancia de Plugin creada correctamente');
+
+        scs_log('Llamando al método init() de Plugin');
+        $plugin->init();
+        scs_log('Plugin inicializado correctamente');
+    } catch (Exception $e) {
+        // Log error
+        scs_log('ERROR: ' . $e->getMessage());
+        scs_log('Traza: ' . $e->getTraceAsString());
+
+        // Show admin notice
+        add_action('admin_notices', function () use ($e) {
 ?>
-    <div class="wrap scs-admin-page scs-dashboard">
-        <h1><?php echo esc_html__('SEO Content Structure Dashboard', 'seo-content-structure'); ?></h1>
-
-        <div class="scs-dashboard-content">
-            <div class="scs-dashboard-widgets">
-                <div class="scs-dashboard-widget">
-                    <h3><?php echo esc_html__('Bienvenido a SEO Content Structure', 'seo-content-structure'); ?></h3>
-                    <p><?php echo esc_html__('Este plugin te permite crear tipos de contenido personalizados con campos avanzados y estructuras JSON-LD para mejorar el SEO de tu sitio.', 'seo-content-structure'); ?></p>
-                </div>
-
-                <div class="scs-dashboard-widget">
-                    <h3><?php echo esc_html__('Primeros Pasos', 'seo-content-structure'); ?></h3>
-                    <ul>
-                        <li><?php echo esc_html__('Crear grupos de campos para organizar tus datos', 'seo-content-structure'); ?></li>
-                        <li><?php echo esc_html__('Configurar tipos de contenido personalizados', 'seo-content-structure'); ?></li>
-                        <li><?php echo esc_html__('Utilizar el editor de schema para mejorar el SEO', 'seo-content-structure'); ?></li>
-                    </ul>
-                </div>
-
-                <div class="scs-dashboard-widget">
-                    <h3><?php echo esc_html__('Recursos', 'seo-content-structure'); ?></h3>
-                    <p><?php echo esc_html__('Consulta nuestra documentación para aprender a usar todas las funciones del plugin.', 'seo-content-structure'); ?></p>
-                </div>
+            <div class="notice notice-error">
+                <p><?php echo esc_html__('Error al inicializar SEO Content Structure:', 'seo-content-structure'); ?> <?php echo esc_html($e->getMessage()); ?></p>
             </div>
-        </div>
-    </div>
 <?php
+        });
+    }
+
+    scs_log('<<< FIN scs_init_plugin()');
 }
 
-// Función para renderizar la página de grupos de campos
-function scs_render_field_groups_page()
+// Registrar el menú de administración directamente como fallback
+function scs_register_admin_menu_fallback()
 {
-?>
-    <div class="wrap">
-        <h1><?php echo esc_html__('Grupos de Campos', 'seo-content-structure'); ?></h1>
-        <p><?php echo esc_html__('Administra tus grupos de campos personalizados.', 'seo-content-structure'); ?></p>
-    </div>
-<?php
-}
+    scs_log('>>> INICIO scs_register_admin_menu_fallback()');
 
-// Función para renderizar la página de tipos de contenido
-function scs_render_post_types_page()
-{
-?>
-    <div class="wrap">
-        <h1><?php echo esc_html__('Tipos de Contenido', 'seo-content-structure'); ?></h1>
-        <p><?php echo esc_html__('Administra tus tipos de contenido personalizados.', 'seo-content-structure'); ?></p>
-    </div>
-<?php
-}
+    // Verificar si el menú ya está registrado por el plugin
+    global $submenu;
+    if (isset($submenu['seo-content-structure'])) {
+        scs_log('El menú ya está registrado - saltando registro fallback');
+        return;
+    }
 
-// Función para renderizar la página de editor de schema
-function scs_render_schema_editor_page()
-{
-?>
-    <div class="wrap">
-        <h1><?php echo esc_html__('Editor de Schema', 'seo-content-structure'); ?></h1>
-        <p><?php echo esc_html__('Crea y edita esquemas JSON-LD para mejorar el SEO de tu sitio.', 'seo-content-structure'); ?></p>
-    </div>
-<?php
-}
-
-// Función para renderizar la página de configuración
-function scs_render_settings_page()
-{
-?>
-    <div class="wrap">
-        <h1><?php echo esc_html__('Configuración', 'seo-content-structure'); ?></h1>
-        <p><?php echo esc_html__('Configura el comportamiento general del plugin.', 'seo-content-structure'); ?></p>
-    </div>
-<?php
-}
-
-// Función para registrar los menús de administración
-function scs_register_admin_menu()
-{
-    error_log('Registrando menú de administración');
-
-    // Menú principal
     add_menu_page(
         __('SEO Content Structure', 'seo-content-structure'),
         __('SEO Content', 'seo-content-structure'),
         'manage_options',
         'seo-content-structure',
-        'scs_render_dashboard_page',
+        'scs_render_main_page_fallback',
         'dashicons-screenoptions',
         30
     );
 
-    // Submenú: Página principal
     add_submenu_page(
         'seo-content-structure',
         __('Dashboard', 'seo-content-structure'),
         __('Dashboard', 'seo-content-structure'),
         'manage_options',
         'seo-content-structure',
-        'scs_render_dashboard_page'
+        'scs_render_main_page_fallback'
     );
 
-    // Submenú: Grupos de campos
-    add_submenu_page(
-        'seo-content-structure',
-        __('Grupos de Campos', 'seo-content-structure'),
-        __('Grupos de Campos', 'seo-content-structure'),
-        'manage_options',
-        'scs-field-groups',
-        'scs_render_field_groups_page'
-    );
-
-    // Submenú: Tipos de contenido
-    add_submenu_page(
-        'seo-content-structure',
-        __('Tipos de Contenido', 'seo-content-structure'),
-        __('Tipos de Contenido', 'seo-content-structure'),
-        'manage_options',
-        'scs-post-types',
-        'scs_render_post_types_page'
-    );
-
-    // Submenú: Editor de Schema
-    add_submenu_page(
-        'seo-content-structure',
-        __('Editor de Schema', 'seo-content-structure'),
-        __('Editor de Schema', 'seo-content-structure'),
-        'manage_options',
-        'scs-schema-editor',
-        'scs_render_schema_editor_page'
-    );
-
-    // Submenú: Configuración
-    add_submenu_page(
-        'seo-content-structure',
-        __('Configuración', 'seo-content-structure'),
-        __('Configuración', 'seo-content-structure'),
-        'manage_options',
-        'scs-settings',
-        'scs_render_settings_page'
-    );
-
-    error_log('Menú de administración registrado correctamente');
+    scs_log('Menú de administración registrado por fallback');
+    scs_log('<<< FIN scs_register_admin_menu_fallback()');
 }
 
-// Registrar el menú de administración
-add_action('admin_menu', 'scs_register_admin_menu');
-
-// Cargar estilos de administración
-function scs_enqueue_admin_styles($hook)
+function scs_render_main_page_fallback()
 {
-    // Solo cargar en las páginas del plugin
-    if (strpos($hook, 'seo-content-structure') === false && strpos($hook, 'scs-') === false) {
-        return;
+    scs_log('Renderizando página principal fallback');
+    echo '<div class="wrap">';
+    echo '<h1>' . esc_html__('SEO Content Structure', 'seo-content-structure') . '</h1>';
+    echo '<p>' . esc_html__('Esta es una página de respaldo. El plugin no se ha inicializado correctamente.', 'seo-content-structure') . '</p>';
+
+    echo '<h2>' . esc_html__('Información de depuración', 'seo-content-structure') . '</h2>';
+    echo '<p>' . esc_html__('Revisa el archivo de registro de errores para más información.', 'seo-content-structure') . '</p>';
+
+    // Mostrar rutas relevantes
+    echo '<h3>' . esc_html__('Rutas', 'seo-content-structure') . '</h3>';
+    echo '<ul>';
+    echo '<li><strong>SCS_PLUGIN_DIR:</strong> ' . esc_html(SCS_PLUGIN_DIR) . '</li>';
+    echo '<li><strong>Plugin Class Path:</strong> ' . esc_html(SCS_PLUGIN_DIR . 'includes/core/class-plugin.php') . '</li>';
+    echo '<li><strong>Admin Controller Path:</strong> ' . esc_html(SCS_PLUGIN_DIR . 'includes/admin/class-admin-controller.php') . '</li>';
+    echo '</ul>';
+
+    // Verificar archivos críticos
+    echo '<h3>' . esc_html__('Verificación de archivos', 'seo-content-structure') . '</h3>';
+    echo '<ul>';
+    $files_to_check = [
+        'includes/core/class-plugin.php',
+        'includes/core/class-loader.php',
+        'includes/admin/class-admin-controller.php',
+        'includes/core/interfaces/interface-registrable.php'
+    ];
+
+    foreach ($files_to_check as $file) {
+        $full_path = SCS_PLUGIN_DIR . $file;
+        $exists = file_exists($full_path);
+        echo '<li>';
+        echo '<strong>' . esc_html($file) . ':</strong> ';
+        if ($exists) {
+            echo '<span style="color:green;">✓ Existe</span>';
+        } else {
+            echo '<span style="color:red;">✗ No existe</span>';
+        }
+        echo '</li>';
     }
+    echo '</ul>';
 
-    wp_enqueue_style(
-        'scs-admin-styles',
-        SCS_PLUGIN_URL . 'assets/css/admin.css',
-        array(),
-        SCS_VERSION
-    );
-}
-add_action('admin_enqueue_scripts', 'scs_enqueue_admin_styles');
-
-// Intentar inicializar el plugin completo (opcional por ahora)
-add_action('plugins_loaded', 'scs_init_plugin', 20);
-function scs_init_plugin()
-{
-    try {
-        error_log('Inicialización del plugin SEO Content Structure comenzada');
-
-        // Carga de traducciones
-        load_plugin_textdomain('seo-content-structure', false, dirname(SCS_PLUGIN_BASENAME) . '/languages');
-
-        error_log('Plugin inicializado correctamente');
-    } catch (Exception $e) {
-        error_log('Error al inicializar el plugin: ' . $e->getMessage());
-    }
+    echo '</div>';
 }
 
-// Hooks de activación y desactivación
+// Registrar el menú fallback como último recurso
+add_action('admin_menu', 'scs_register_admin_menu_fallback', 999);
+
+/**
+ * Código para ejecutar durante la activación del plugin
+ */
 register_activation_hook(__FILE__, 'scs_activate_plugin');
 function scs_activate_plugin()
 {
+    scs_log('>>> INICIO scs_activate_plugin()');
+
     // Crear tablas personalizadas si son necesarias
     require_once SCS_PLUGIN_DIR . 'includes/core/class-activator.php';
     SEOContentStructure\Core\Activator::activate();
+    scs_log('Activación completada');
 
     // Limpiar caché de permalinks
     flush_rewrite_rules();
+
+    scs_log('<<< FIN scs_activate_plugin()');
 }
 
+/**
+ * Código para ejecutar durante la desactivación del plugin
+ */
 register_deactivation_hook(__FILE__, 'scs_deactivate_plugin');
 function scs_deactivate_plugin()
 {
+    scs_log('>>> INICIO scs_deactivate_plugin()');
+
     // Limpiar caché y realizar otras tareas de limpieza
     require_once SCS_PLUGIN_DIR . 'includes/core/class-deactivator.php';
     SEOContentStructure\Core\Deactivator::deactivate();
+    scs_log('Desactivación completada');
 
     // Limpiar caché de permalinks
     flush_rewrite_rules();
+
+    scs_log('<<< FIN scs_deactivate_plugin()');
 }

@@ -11,6 +11,8 @@ namespace SEOContentStructure\Admin;
 
 use SEOContentStructure\Core\Interfaces\Registrable;
 use SEOContentStructure\Core\Loader;
+use SEOContentStructure\PostTypes\PostTypeFactory;
+use SEOContentStructure\Admin\FieldGroupController;
 
 /**
  * Clase que maneja la interfaz de administración
@@ -59,8 +61,6 @@ class AdminController implements Registrable
      */
     public function add_admin_menu()
     {
-
-        error_log('Añadiendo menú de administración');
         // Menú principal
         add_menu_page(
             __('SEO Content Structure', 'seo-content-structure'),
@@ -164,59 +164,42 @@ class AdminController implements Registrable
                     'saving'         => __('Guardando...', 'seo-content-structure'),
                     'saved'          => __('Guardado correctamente', 'seo-content-structure'),
                     'error'          => __('Ha ocurrido un error', 'seo-content-structure'),
+                    'confirm_delete_field' => __('¿Estás seguro de que deseas eliminar este campo?', 'seo-content-structure'),
                 ),
             )
         );
 
         // Cargar estilos específicos según la página
         if (strpos($hook, 'scs-field-groups') !== false) {
+            // Si estamos en la página de grupos de campos, cargar también los estilos para campos
             wp_enqueue_style(
-                'scs-field-groups',
-                SCS_PLUGIN_URL . 'assets/css/field-groups.css',
+                'scs-field-types',
+                SCS_PLUGIN_URL . 'assets/css/field-types.css',
                 array('scs-admin-styles'),
                 SCS_VERSION
             );
 
-            wp_enqueue_script(
-                'scs-field-groups',
-                SCS_PLUGIN_URL . 'assets/js/field-groups.js',
-                array('scs-admin-scripts'),
-                SCS_VERSION,
-                true
-            );
-        } elseif (strpos($hook, 'scs-post-types') !== false) {
-            wp_enqueue_style(
-                'scs-post-types',
-                SCS_PLUGIN_URL . 'assets/css/post-types.css',
-                array('scs-admin-styles'),
-                SCS_VERSION
-            );
+            // Scripts específicos para campo de tipo imagen
+            wp_enqueue_media();
 
             wp_enqueue_script(
-                'scs-post-types',
-                SCS_PLUGIN_URL . 'assets/js/post-types.js',
-                array('scs-admin-scripts'),
+                'scs-field-types',
+                SCS_PLUGIN_URL . 'assets/js/field-types.js',
+                array('scs-admin-scripts', 'jquery', 'wp-color-picker'),
                 SCS_VERSION,
                 true
             );
         } elseif (strpos($hook, 'scs-schema-editor') !== false) {
-            wp_enqueue_style(
-                'scs-schema-editor',
-                SCS_PLUGIN_URL . 'assets/css/schema-editor.css',
-                array('scs-admin-styles'),
-                SCS_VERSION
-            );
+            // CodeMirror para editor JSON
+            wp_enqueue_code_editor(array('type' => 'application/json'));
 
             wp_enqueue_script(
-                'scs-schema-editor',
-                SCS_PLUGIN_URL . 'assets/js/schema-editor.js',
+                'scs-json-ld-builder',
+                SCS_PLUGIN_URL . 'assets/js/json-ld-builder.js',
                 array('scs-admin-scripts', 'wp-codemirror'),
                 SCS_VERSION,
                 true
             );
-
-            // CodeMirror para editor JSON
-            wp_enqueue_code_editor(array('type' => 'application/json'));
         }
     }
 
@@ -259,8 +242,6 @@ class AdminController implements Registrable
                 case 'deleted':
                     $message = __('Elemento eliminado correctamente.', 'seo-content-structure');
                     break;
-
-                    // Más casos según sea necesario
             }
 
             if (! empty($message)) {
@@ -358,7 +339,7 @@ class AdminController implements Registrable
      */
     public function render_main_page()
     {
-        require_once SCS_PLUGIN_DIR . 'includes/admin/views/main-page.php';
+        include_once SCS_PLUGIN_DIR . 'includes/admin/views/main-page.php';
     }
 
     /**
@@ -366,7 +347,7 @@ class AdminController implements Registrable
      */
     public function render_field_groups_page()
     {
-        require_once SCS_PLUGIN_DIR . 'includes/admin/views/field-groups-page.php';
+        include_once SCS_PLUGIN_DIR . 'includes/admin/views/field-group-edit.php';
     }
 
     /**
@@ -374,7 +355,7 @@ class AdminController implements Registrable
      */
     public function render_post_types_page()
     {
-        require_once SCS_PLUGIN_DIR . 'includes/admin/views/post-types-page.php';
+        include_once SCS_PLUGIN_DIR . 'includes/admin/views/post-type-builder.php';
     }
 
     /**
@@ -382,7 +363,7 @@ class AdminController implements Registrable
      */
     public function render_schema_editor_page()
     {
-        require_once SCS_PLUGIN_DIR . 'includes/admin/views/schema-editor-page.php';
+        include_once SCS_PLUGIN_DIR . 'includes/admin/views/schema-editor-page.php';
     }
 
     /**
@@ -390,7 +371,6 @@ class AdminController implements Registrable
      */
     public function render_settings_page()
     {
-        $settings_page = new SettingsPage();
-        $settings_page->render_page();
+        include_once SCS_PLUGIN_DIR . 'includes/admin/views/settings-page.php';
     }
 }

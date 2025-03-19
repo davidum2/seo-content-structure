@@ -11,12 +11,7 @@
 if (! defined('ABSPATH')) {
     exit;
 }
-// Añade esto antes de la línea 16 en main-page.php
-require_once SCS_PLUGIN_DIR . 'includes/post-types/class-post-type-factory.php';
-require_once SCS_PLUGIN_DIR . 'includes/admin/class-field-group-controller.php';
 
-// Luego las líneas originales
-$post_type_factory = new \SEOContentStructure\PostTypes\PostTypeFactory();
 // Obtener datos para el dashboard
 $post_type_factory = new \SEOContentStructure\PostTypes\PostTypeFactory();
 $registered_post_types = $post_type_factory->get_registered_post_types();
