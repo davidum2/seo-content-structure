@@ -18,6 +18,10 @@ use SEOContentStructure\PostTypes\PostTypeFactory;
 /**
  * Clase principal del plugin
  */
+if (!defined('SCS_PLUGIN_DIR')) {
+    define('SCS_PLUGIN_DIR', plugin_dir_path(__FILE__));
+}
+
 class Plugin
 {
     /**
@@ -89,8 +93,8 @@ class Plugin
      */
     private function init_admin()
     {
-        // Solo cargar en el área de administración
         if (is_admin()) {
+            error_log('Inicializando controlador de administración');
             $admin_controller = new AdminController();
             $admin_controller->register($this->loader);
         }

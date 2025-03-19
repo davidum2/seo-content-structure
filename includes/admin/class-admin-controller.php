@@ -59,6 +59,8 @@ class AdminController implements Registrable
      */
     public function add_admin_menu()
     {
+
+        error_log('Añadiendo menú de administración');
         // Menú principal
         add_menu_page(
             __('SEO Content Structure', 'seo-content-structure'),

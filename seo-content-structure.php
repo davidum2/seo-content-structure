@@ -26,6 +26,11 @@ define('SCS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('SCS_PLUGIN_BASENAME', plugin_basename(__FILE__));
 define('SCS_PLUGIN_FILE', __FILE__);
 
+
+// Añade esto al principio de tu archivo principal del plugin
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 /**
  * Función para autocargar las clases del plugin
  */
@@ -49,6 +54,16 @@ spl_autoload_register(function ($class) {
     if (file_exists($file)) {
         require $file;
     }
+    error_log("Intentando cargar: $class desde $file");
+
+    // Añade esto para depuración
+    if (strpos($class, 'SEOContentStructure') === 0) {
+        $file = SCS_PLUGIN_DIR . 'includes/' . str_replace('\\', '/', substr($class, strlen('SEOContentStructure\\'))) . '.php';
+        error_log("Intentando cargar: $class desde $file");
+        if (!file_exists($file)) {
+            error_log("Archivo no encontrado: $file");
+        }
+    }
 });
 
 // Cargar el archivo de funciones helper
@@ -64,6 +79,8 @@ add_action('plugins-loaded', 'scs_init_plugin', 20);
  */
 function scs_init_plugin()
 {
+
+    error_log('Inicialización del plugin SEO Content Structure comenzada');
     // Carga de traducciones
     load_plugin_textdomain('seo-content-structure', false, dirname(SCS_PLUGIN_BASENAME) . '/languages');
 
