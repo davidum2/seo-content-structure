@@ -116,11 +116,11 @@ class Plugin
             $elementor_integration->register($this->loader);
         }
 
-        // Integración con WooCommerce (si está activo)
-        if (class_exists('WooCommerce')) {
-            $woocommerce_integration = new WooCommerceIntegration();
-            $woocommerce_integration->register($this->loader);
-        }
+        // // Integración con WooCommerce (si está activo)
+        // if (class_exists('WooCommerce')) {
+        //     $woocommerce_integration = new WooCommerceIntegration();
+        //     $woocommerce_integration->register($this->loader);
+        // }
     }
 
     /**
