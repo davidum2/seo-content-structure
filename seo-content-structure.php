@@ -99,3 +99,16 @@ function scs_deactivate_plugin()
     // Limpiar caché de permalinks
     flush_rewrite_rules();
 }
+add_action('admin_menu', function () {
+    add_menu_page(
+        'Test Menu',
+        'Test Menu',
+        'manage_options',
+        'test-menu',
+        function () {
+            echo 'Test page';
+        },
+        'dashicons-admin-generic',
+        30
+    );
+});
