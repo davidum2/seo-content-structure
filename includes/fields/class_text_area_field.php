@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Campo de tipo texto
+ * Campo de tipo textarea
  *
  * @package SEOContentStructure
  * @subpackage Fields
@@ -10,10 +10,24 @@
 namespace SEOContentStructure\Fields;
 
 /**
- * Clase que implementa un campo de tipo texto
+ * Clase que implementa un campo de tipo textarea
  */
-class TextField extends Field
+class TextareaField extends Field
 {
+    /**
+     * Número de filas del textarea
+     *
+     * @var int
+     */
+    protected $rows = 5;
+
+    /**
+     * Número de columnas del textarea
+     *
+     * @var int
+     */
+    protected $cols = 50;
+
     /**
      * Longitud mínima permitida
      *
@@ -36,15 +50,17 @@ class TextField extends Field
     public function __construct($args = array())
     {
         // Establecer el tipo de campo
-        $args['type'] = 'text';
+        $args['type'] = 'textarea';
 
-        // Configurar propiedades específicas del campo de texto
-        $text_defaults = array(
+        // Configurar propiedades específicas del campo textarea
+        $textarea_defaults = array(
+            'rows'       => 5,
+            'cols'       => 50,
             'min_length' => 0,
             'max_length' => 0,
         );
 
-        $args = wp_parse_args($args, $text_defaults);
+        $args = wp_parse_args($args, $textarea_defaults);
 
         // Llamar al constructor padre
         parent::__construct($args);
@@ -58,7 +74,7 @@ class TextField extends Field
      */
     public function sanitize($value)
     {
-        return sanitize_text_field($value);
+        return sanitize_textarea_field($value);
     }
 
     /**
@@ -124,7 +140,7 @@ class TextField extends Field
 
         // Construir el HTML del campo
         $html = sprintf(
-            '<div class="scs-field-wrap scs-field-text-wrap" style="width:%s;">',
+            '<div class="scs-field-wrap scs-field-textarea-wrap" style="width:%s;">',
             esc_attr($this->width)
         );
 
@@ -148,10 +164,10 @@ class TextField extends Field
         $attributes = array(
             'id'          => $field_id,
             'name'        => $field_name,
-            'type'        => 'text',
-            'value'       => esc_attr($value),
-            'class'       => 'scs-field scs-text-field',
-            'placeholder' => $this->placeholder
+            'class'       => 'scs-field scs-textarea-field',
+            'placeholder' => $this->placeholder,
+            'rows'        => $this->rows,
+            'cols'        => $this->cols
         );
 
         if ($this->required) {
@@ -166,10 +182,11 @@ class TextField extends Field
             $attributes['maxlength'] = $this->max_length;
         }
 
-        // Campo de texto
+        // Campo textarea
         $html .= sprintf(
-            '<input %s />',
-            $this->attributes_to_string($attributes)
+            '<textarea %s>%s</textarea>',
+            $this->attributes_to_string($attributes),
+            esc_textarea($value)
         );
 
         $html .= '</div>'; // .scs-field-wrap
@@ -192,11 +209,11 @@ class TextField extends Field
 
         // Generar el HTML para mostrar el texto
         $html = sprintf(
-            '<div class="scs-field scs-field-text %s">',
+            '<div class="scs-field scs-field-textarea %s">',
             esc_attr($this->css_class)
         );
 
-        $html .= esc_html($value);
+        $html .= wpautop(esc_html($value));
 
         $html .= '</div>';
 

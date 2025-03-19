@@ -1,0 +1,225 @@
+/**
+ * Estilos para tipos de campos personalizados
+ */
+
+/* Estilos generales */
+.scs-field-wrap {
+  margin-bottom: 15px;
+  position: relative;
+}
+
+.scs-field-wrap label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 600;
+}
+
+.scs-field-wrap .description {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 5px;
+}
+
+.scs-field-wrap input[type='text'],
+.scs-field-wrap input[type='number'],
+.scs-field-wrap input[type='url'],
+.scs-field-wrap input[type='email'],
+.scs-field-wrap select,
+.scs-field-wrap textarea {
+  width: 100%;
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+}
+
+.scs-field-wrap .required {
+  color: #d32f2f;
+}
+
+/* Campo de tipo texto */
+.scs-field-text-wrap {
+  /* Estilos específicos para campo de texto */
+}
+
+/* Campo de tipo textarea */
+.scs-field-textarea-wrap textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+/* Campo de tipo número */
+.scs-field-number-wrap input[type='number'] {
+  max-width: 200px;
+}
+
+/* Campo de tipo select */
+.scs-field-select-wrap select {
+  max-width: 400px;
+}
+
+/* Campo de tipo radio */
+.scs-field-radio-wrap .scs-radio-options {
+  margin-top: 5px;
+}
+
+.scs-radio-option {
+  margin-bottom: 5px;
+}
+
+.scs-radio-layout-horizontal .scs-radio-option {
+  display: inline-block;
+  margin-right: 15px;
+}
+
+/* Campo de tipo checkbox */
+.scs-field-checkbox-wrap .scs-checkbox-container {
+  margin-top: 5px;
+  display: flex;
+  align-items: center;
+}
+
+.scs-field-checkbox-wrap .scs-checkbox-container input[type='checkbox'] {
+  margin-right: 5px;
+}
+
+/* Campo de tipo fecha */
+.scs-field-date-wrap input.scs-date-field {
+  max-width: 200px;
+}
+
+/* Campo de tipo imagen */
+.scs-field-image-wrap .scs-image-preview {
+  margin: 10px 0;
+  padding: 10px;
+  background: #f8f9fa;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.scs-field-image-wrap .scs-image-field-buttons {
+  margin-top: 10px;
+}
+
+/* Campo de tipo repeater */
+.scs-field-repeater-wrap .scs-repeater-container {
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+
+.scs-field-repeater-wrap .scs-repeater-header {
+  display: flex;
+  background: #f8f9fa;
+  padding: 10px;
+  font-weight: 600;
+  border-bottom: 1px solid #ddd;
+}
+
+.scs-field-repeater-wrap .scs-repeater-header-cell {
+  flex: 1;
+  padding: 0 5px;
+}
+
+.scs-field-repeater-wrap .scs-repeater-actions-cell {
+  width: 80px;
+  flex: none;
+}
+
+.scs-field-repeater-wrap .scs-repeater-row {
+  display: flex;
+  padding: 10px;
+  border-bottom: 1px solid #eee;
+  align-items: center;
+}
+
+.scs-field-repeater-wrap .scs-repeater-row:last-child {
+  border-bottom: none;
+}
+
+.scs-field-repeater-wrap .scs-repeater-cell {
+  flex: 1;
+  padding: 0 5px;
+}
+
+.scs-field-repeater-wrap .scs-repeater-sort-handle {
+  cursor: move;
+  color: #999;
+}
+
+.scs-field-repeater-wrap .scs-repeater-sort-handle:hover {
+  color: #1e88e5;
+}
+
+.scs-field-repeater-wrap .scs-repeater-remove-row {
+  color: #d32f2f;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.scs-field-repeater-wrap .scs-repeater-add-row {
+  margin-top: 10px;
+}
+
+/* Frontend display */
+.scs-field {
+  margin-bottom: 15px;
+}
+
+.scs-field-text,
+.scs-field-textarea,
+.scs-field-number,
+.scs-field-select,
+.scs-field-radio,
+.scs-field-checkbox,
+.scs-field-date {
+  /* Estilos generales para visualización frontend */
+}
+
+.scs-field-image img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+.scs-repeater-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.scs-repeater-item {
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eee;
+}
+
+.scs-repeater-item:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.scs-checkbox-checked:before {
+  content: '✓';
+  margin-right: 5px;
+  color: #4caf50;
+}
+
+.scs-checkbox-unchecked:before {
+  content: '✗';
+  margin-right: 5px;
+  color: #f44336;
+}
+
+/* Media queries */
+@media (max-width: 768px) {
+  .scs-radio-layout-horizontal .scs-radio-option {
+    display: block;
+    margin-right: 0;
+    margin-bottom: 10px;
+  }
+}
