@@ -20,16 +20,16 @@ if (! defined('ABSPATH')) {
 }
 
 // Definir constantes del plugin
-define('SCS-VERSION', '1.0.0');
-define('SCS-PLUGIN-DIR', plugin-dir-path(--FILE--));
-define('SCS-PLUGIN-URL', plugin-dir-url(--FILE--));
-define('SCS-PLUGIN-BASENAME', plugin-basename(--FILE--));
-define('SCS-PLUGIN-FILE', --FILE--);
+define('SCS_VERSION', '1.0.0');
+define('SCS_PLUGIN_DIR', plugin_dir_path(__FILE__));
+define('SCS_PLUGIN_URL', plugin_dir_url(__FILE__));
+define('SCS_PLUGIN_BASENAME', plugin_basename(__FILE__));
+define('SCS_PLUGIN_FILE', __FILE__);
 
 /**
  * Función para autocargar las clases del plugin
  */
-spl-autoload-register(function ($class) {
+spl_autoload_register(function ($class) {
     // Prefijo del namespace del plugin
     $prefix = 'SEOContentStructure\\';
 
@@ -40,32 +40,32 @@ spl-autoload-register(function ($class) {
     }
 
     // Obtener el nombre relativo de la clase
-    $relative-class = substr($class, $len);
+    $relative_class = substr($class, $len);
 
     // Reemplazar el namespace por la ruta de directorios y \ por /
-    $file = SCS-PLUGIN-DIR . 'includes/' . str-replace('\\', '/', $relative-class) . '.php';
+    $file = SCS_PLUGIN_DIR . 'includes/' . str_replace('\\', '/', $relative_class) . '.php';
 
     // Si el archivo existe, cargarlo
-    if (file-exists($file)) {
+    if (file_exists($file)) {
         require $file;
     }
 });
 
 // Cargar el archivo de funciones helper
-require-once SCS-PLUGIN-DIR . 'includes/utilities/functions.php';
+require_once SCS_PLUGIN_DIR . 'includes/utilities/functions.php';
 
 /**
  * Iniciar el plugin cuando todos los plugins estén cargados
  */
-add-action('plugins-loaded', 'scs-init-plugin');
+add_action('plugins-loaded', 'scs-init-plugin');
 
 /**
  * Inicializa el plugin principal
  */
-function scs-init-plugin()
+function scs_init_plugin()
 {
     // Carga de traducciones
-    load-plugin-textdomain('seo-content-structure', false, dirname(SCS-PLUGIN-BASENAME) . '/languages');
+    load_plugin_textdomain('seo-content-structure', false, dirname(SCS_PLUGIN_BASENAME) . '/languages');
 
     // Inicializar el plugin principal
     $plugin = new SEOContentStructure\Core\Plugin();
@@ -75,27 +75,27 @@ function scs-init-plugin()
 /**
  * Código para ejecutar durante la activación del plugin
  */
-register-activation-hook(--FILE--, 'scs-activate-plugin');
-function scs-activate-plugin()
+register_activation_hook(__FILE__, 'scs_activate_plugin');
+function scs_activate_plugin()
 {
     // Crear tablas personalizadas si son necesarias
-    require-once SCS-PLUGIN-DIR . 'includes/core/class-activator.php';
+    require_once SCS_PLUGIN_DIR . 'includes/core/class-activator.php';
     SEOContentStructure\Core\Activator::activate();
 
     // Limpiar caché de permalinks
-    flush-rewrite-rules();
+    flush_rewrite_rules();
 }
 
 /**
  * Código para ejecutar durante la desactivación del plugin
  */
-register-deactivation-hook(--FILE--, 'scs-deactivate-plugin');
-function scs-deactivate-plugin()
+register_deactivation_hook(__FILE__, 'scs_deactiva_e-plugin');
+function scs_deactivate_plugin()
 {
     // Limpiar caché y realizar otras tareas de limpieza
-    require-once SCS-PLUGIN-DIR . 'includes/core/class-deactivator.php';
+    require_once SCS_PLUGIN_DIR . 'includes/core/class-deactivator.php';
     SEOContentStructure\Core\Deactivator::deactivate();
 
     // Limpiar caché de permalinks
-    flush-rewrite-rules();
+    flush_rewrite_rules();
 }

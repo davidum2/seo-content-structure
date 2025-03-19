@@ -9,6 +9,10 @@
 
 namespace SEOContentStructure\Core;
 
+if (!defined('SCS_VERSION')) {
+    define('SCS_VERSION', '1.0.0'); // Replace '1.0.0' with the actual version of your plugin
+}
+
 /**
  * Clase que maneja la activación del plugin
  */
