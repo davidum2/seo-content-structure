@@ -95,8 +95,24 @@ class Plugin
     {
         if (is_admin()) {
             error_log('Inicializando controlador de administración');
-            $admin_controller = new AdminController();
-            $admin_controller->register($this->loader);
+
+            // Cargar directamente el archivo en lugar de depender del autoloader
+            $admin_controller_file = SCS_PLUGIN_DIR . 'includes/admin/class-admin-controller.php';
+            error_log("Intentando cargar directamente: $admin_controller_file");
+
+            if (file_exists($admin_controller_file)) {
+                require_once $admin_controller_file;
+
+                if (class_exists('SEOContentStructure\\Admin\\AdminController')) {
+                    $admin_controller = new \SEOContentStructure\Admin\AdminController();
+                    $admin_controller->register($this->loader);
+                    error_log("AdminController cargado y registrado con éxito");
+                } else {
+                    error_log("ERROR: El archivo existe pero la clase no se definió correctamente");
+                }
+            } else {
+                error_log("ERROR: Archivo no encontrado: $admin_controller_file");
+            }
         }
     }
 
