@@ -62,18 +62,35 @@ spl_autoload_register(function ($class) {
     // Convertir CamelCase a kebab-case para el nombre del archivo
     $file_name = 'class-' . strtolower(preg_replace('/([a-z])([A-Z])/', '$1-$2', $class_name));
 
-    // Construir la ruta completa
+    // Construir la ruta base
     $file = SCS_PLUGIN_DIR . 'includes/';
 
     // Añadir partes del directorio (si existen)
     if (!empty($path_parts)) {
-        // Corrección: Reemplazar 'posttypes' con 'post-types'
+        // Corrección: Reemplazar 'PostTypes' con 'post-types' sin importar mayúsculas
         foreach ($path_parts as &$part) {
-            if ($part === 'posttypes') {
+            if (strtolower($part) === 'posttypes') {
                 $part = 'post-types';
             }
         }
-        $file .= strtolower(implode('/', $path_parts)) . '/';
+
+        // Convertir a minúsculas e implode
+        $path = strtolower(implode('/', $path_parts));
+
+        // Caso especial para clases en el namespace PostTypes
+        if ($path === 'post-types') {
+            // Si es PostType (clase abstracta), cambiar el nombre del archivo
+            if ($class_name === 'PostType') {
+                $path .= '/post-types';
+                // Sobreescribir el nombre del archivo para usar prefijo abstracto
+                $file_name = 'abstract-class-post-type';
+            }
+            // Para ServicePostType y otros tipos de contenido específicos
+            else if ($class_name === 'ServicePostType' || $class_name === 'GenericPostType') {
+                $path .= '/post-types';
+            }
+        }
+        $file .= $path . '/';
     }
 
     // Añadir el nombre del archivo
@@ -131,7 +148,6 @@ spl_autoload_register(function ($class) {
     // Registro de error solo si llegamos a este punto
     scs_log('Autoloader: No se pudo encontrar el archivo para la clase ' . $class);
 });
-
 // Cargar el archivo de funciones helper
 require_once SCS_PLUGIN_DIR . 'includes/utilities/functions.php';
 scs_log('Funciones helper cargadas');
