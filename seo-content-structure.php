@@ -90,6 +90,13 @@ spl_autoload_register(function ($class) {
                 $path .= '/post-types';
             }
         }
+
+
+        // Caso especial para la clase Field en namespace Fields
+        if ($path === 'fields' && $class_name === 'Field') {
+            // Sobreescribir el nombre del archivo para usar prefijo abstracto
+            $file_name = 'abstract-class-field';
+        }
         $file .= $path . '/';
     }
 
