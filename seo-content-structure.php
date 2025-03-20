@@ -22,7 +22,9 @@ if (!defined('ABSPATH')) {
 // Función de utilidad para logs
 function scs_log($message)
 {
-    error_log('SCS Debug: ' . $message);
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('SCS Debug: ' . $message);
+    }
 }
 
 // Definir constantes del plugin
@@ -33,11 +35,12 @@ define('SCS_PLUGIN_BASENAME', plugin_basename(__FILE__));
 define('SCS_PLUGIN_FILE', __FILE__);
 
 scs_log('Plugin inicializándose - constantes definidas');
-scs_log('SCS_PLUGIN_DIR: ' . SCS_PLUGIN_DIR);
 
 /**
  * Función para autocargar las clases del plugin
  */
+
+
 spl_autoload_register(function ($class) {
     // Prefijo del namespace del plugin
     $prefix = 'SEOContentStructure\\';
@@ -48,90 +51,85 @@ spl_autoload_register(function ($class) {
         return;
     }
 
-    scs_log('Autoloader: Intentando cargar clase ' . $class);
-
     // Obtener el nombre relativo de la clase
     $relative_class = substr($class, $len);
-    scs_log('Autoloader: Clase relativa ' . $relative_class);
 
-    // Reemplazar el namespace por la ruta de directorios y \ por /
-    $file = SCS_PLUGIN_DIR . 'includes/' . str_replace('\\', '/', $relative_class) . '.php';
-    scs_log('Autoloader: Buscando archivo ' . $file);
+    // Convertir namespace a ruta de directorio
+    $path_parts = explode('\\', $relative_class);
+    $class_name = array_pop($path_parts); // Obtener el último elemento (nombre de la clase)
+    $namespace = implode('\\', $path_parts);
 
-    // Debug: Comprobar la existencia del archivo
-    if (!file_exists($file)) {
-        scs_log('Autoloader: Archivo no encontrado ' . $file . ' - Intentando alternativas');
+    // Convertir CamelCase a kebab-case para el nombre del archivo
+    $file_name = 'class-' . strtolower(preg_replace('/([a-z])([A-Z])/', '$1-$2', $class_name));
 
-        // Intentar versiones en minúsculas del archivo
-        $lowercase_file = SCS_PLUGIN_DIR . 'includes/' . strtolower(str_replace('\\', '/', $relative_class)) . '.php';
-        scs_log('Autoloader: Intentando versión en minúsculas ' . $lowercase_file);
+    // Construir la ruta completa
+    $file = SCS_PLUGIN_DIR . 'includes/';
 
-        if (file_exists($lowercase_file)) {
-            scs_log('Autoloader: ENCONTRADO archivo en minúsculas ' . $lowercase_file);
-            require $lowercase_file;
-            return;
-        }
-
-        // Intentar versiones con class- prefijo
-        $prefix_file = SCS_PLUGIN_DIR . 'includes/' . str_replace('\\', '/', $relative_class) . '.php';
-        $prefix_file = str_replace('.php', '', $prefix_file);
-        $class_name = basename($prefix_file);
-        $dir_name = dirname($prefix_file);
-
-        scs_log('Autoloader: Nombre de clase extraído: ' . $class_name);
-        scs_log('Autoloader: Directorio: ' . $dir_name);
-
-        // Intentar con class_ prefijo
-        $class_prefix_file = $dir_name . '/class_' . $class_name . '.php';
-        scs_log('Autoloader: Intentando class_ ' . $class_prefix_file);
-
-        if (file_exists($class_prefix_file)) {
-            scs_log('Autoloader: ENCONTRADO class_ ' . $class_prefix_file);
-            require $class_prefix_file;
-            return;
-        }
-
-        // Intentar con class- prefijo
-        $class_prefix_file = $dir_name . '/class-' . $class_name . '.php';
-        scs_log('Autoloader: Intentando class- ' . $class_prefix_file);
-
-        if (file_exists($class_prefix_file)) {
-            scs_log('Autoloader: ENCONTRADO class- ' . $class_prefix_file);
-            require $class_prefix_file;
-            return;
-        }
-
-        // Intentar con abstract-class prefijo para clases abstractas
-        if (strpos($class_name, 'Abstract') !== false) {
-            $abstract_class_name = str_replace('Abstract', '', $class_name);
-            $abstract_prefix_file = $dir_name . '/abstract-class-' . strtolower($abstract_class_name) . '.php';
-            scs_log('Autoloader: Intentando abstract-class- ' . $abstract_prefix_file);
-
-            if (file_exists($abstract_prefix_file)) {
-                scs_log('Autoloader: ENCONTRADO abstract-class- ' . $abstract_prefix_file);
-                require $abstract_prefix_file;
-                return;
+    // Añadir partes del directorio (si existen)
+    if (!empty($path_parts)) {
+        // Corrección: Reemplazar 'posttypes' con 'post-types'
+        foreach ($path_parts as &$part) {
+            if ($part === 'posttypes') {
+                $part = 'post-types';
             }
         }
-
-        // Intentar con interface- prefijo para interfaces
-        if (strpos($class_name, 'Interface') !== false) {
-            $interface_name = str_replace('Interface', '', $class_name);
-            $interface_prefix_file = $dir_name . '/interface-' . strtolower($interface_name) . '.php';
-            scs_log('Autoloader: Intentando interface- ' . $interface_prefix_file);
-
-            if (file_exists($interface_prefix_file)) {
-                scs_log('Autoloader: ENCONTRADO interface- ' . $interface_prefix_file);
-                require $interface_prefix_file;
-                return;
-            }
-        }
-
-        scs_log('Autoloader: ERROR - No se pudo encontrar ninguna versión del archivo para la clase ' . $class);
-    } else {
-        scs_log('Autoloader: ENCONTRADO archivo estándar ' . $file);
-        require $file;
+        $file .= strtolower(implode('/', $path_parts)) . '/';
     }
+
+    // Añadir el nombre del archivo
+    $file .= $file_name . '.php';
+
+    // Registro de la ruta construida
+    scs_log('Autoloader: Buscando archivo ' . $file . ' para la clase ' . $class);
+
+    // Cargar el archivo si existe
+    if (file_exists($file)) {
+        require_once $file;
+        return;
+    }
+
+    // Para interfaces, intentar con prefijo interface-
+    if (strpos($class_name, 'Interface') !== false || strpos($namespace, 'Interfaces') !== false) {
+        $interface_name = str_replace('Interface', '', $class_name);
+        $file_name = 'interface-' . strtolower(preg_replace('/([a-z])([A-Z])/', '$1-$2', $interface_name));
+
+        $file = SCS_PLUGIN_DIR . 'includes/';
+        if (!empty($path_parts)) {
+            $file .= strtolower(implode('/', $path_parts)) . '/';
+        }
+        $file .= $file_name . '.php';
+
+        // Registro de la ruta construida
+        scs_log('Autoloader: Buscando archivo ' . $file . ' para la clase ' . $class);
+
+        if (file_exists($file)) {
+            require_once $file;
+            return;
+        }
+    }
+
+    // Para clases abstractas, intentar con prefijo abstract-class-
+    if (strpos($class_name, 'Abstract') !== false) {
+        $abstract_name = str_replace('Abstract', '', $class_name);
+        $file_name = 'abstract-class-' . strtolower(preg_replace('/([a-z])([A-Z])/', '$1-$2', $abstract_name));
+
+        $file = SCS_PLUGIN_DIR . 'includes/';
+        if (!empty($path_parts)) {
+            $file .= strtolower(implode('/', $path_parts)) . '/';
+        }
+        $file .= $file_name . '.php';
+
+        // Registro de la ruta construida
+        scs_log('Autoloader: Buscando archivo ' . $file . ' para la clase ' . $class);
+
+        if (file_exists($file)) {
+            require_once $file;
+            return;
+        }
+    }
+
+    // Registro de error solo si llegamos a este punto
+    scs_log('Autoloader: No se pudo encontrar el archivo para la clase ' . $class);
 });
 
 // Cargar el archivo de funciones helper
@@ -141,8 +139,7 @@ scs_log('Funciones helper cargadas');
 /**
  * Iniciar el plugin cuando todos los plugins estén cargados
  */
-scs_log('Registrando gancho plugins-loaded');
-add_action('plugins-loaded', 'scs_init_plugin', 20);
+add_action('plugins_loaded', 'scs_init_plugin', 20);
 
 /**
  * Inicializa el plugin principal
@@ -159,26 +156,26 @@ function scs_init_plugin()
     try {
         scs_log('Intentando crear instancia de Plugin');
 
-        // Cargar clases principales manualmente si es necesario
-        if (!class_exists('SEOContentStructure\\Core\\Plugin')) {
-            scs_log('La clase Plugin no existe, intentando cargar manualmente');
-            $plugin_file = SCS_PLUGIN_DIR . 'includes/core/class-plugin.php';
+        // Verificar que las clases clave existen
+        $core_files = [
+            SCS_PLUGIN_DIR . 'includes/core/class-plugin.php',
+            SCS_PLUGIN_DIR . 'includes/core/class-loader.php'
+        ];
 
-            if (file_exists($plugin_file)) {
-                scs_log('Cargando archivo class-plugin.php manualmente');
-                require_once $plugin_file;
-            } else {
-                throw new Exception("No se encontró el archivo principal class-plugin.php");
+        foreach ($core_files as $file) {
+            if (!file_exists($file)) {
+                throw new \Exception("Archivo crítico no encontrado: " . $file);
             }
         }
 
-        $plugin = new SEOContentStructure\Core\Plugin();
+        // Crear instancia del plugin
+        $plugin = new \SEOContentStructure\Core\Plugin();
         scs_log('Instancia de Plugin creada correctamente');
 
         scs_log('Llamando al método init() de Plugin');
         $plugin->init();
         scs_log('Plugin inicializado correctamente');
-    } catch (Exception $e) {
+    } catch (\Throwable $e) {
         // Log error
         scs_log('ERROR: ' . $e->getMessage());
         scs_log('Traza: ' . $e->getTraceAsString());

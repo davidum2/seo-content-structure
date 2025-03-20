@@ -11,17 +11,15 @@ namespace SEOContentStructure\Core;
 
 use SEOContentStructure\Admin\AdminController;
 use SEOContentStructure\API\RestController;
+use SEOContentStructure\Core\Loader;
+use SEOContentStructure\Core\I18n;
 use SEOContentStructure\Integrations\ElementorIntegration;
-use SEOContentStructure\Integrations\WooCommerceIntegration;
 use SEOContentStructure\PostTypes\PostTypeFactory;
+use SEOContentStructure\Utilities\Shortcodes;
 
 /**
  * Clase principal del plugin
  */
-if (!defined('SCS_PLUGIN_DIR')) {
-    define('SCS_PLUGIN_DIR', plugin_dir_path(__FILE__));
-}
-
 class Plugin
 {
     /**
@@ -94,24 +92,16 @@ class Plugin
     private function init_admin()
     {
         if (is_admin()) {
-            error_log('Inicializando controlador de administración');
+            try {
+                $admin_controller = new AdminController();
+                $admin_controller->register($this->loader);
 
-            // Cargar directamente el archivo en lugar de depender del autoloader
-            $admin_controller_file = SCS_PLUGIN_DIR . 'includes/admin/class-admin-controller.php';
-            error_log("Intentando cargar directamente: $admin_controller_file");
-
-            if (file_exists($admin_controller_file)) {
-                require_once $admin_controller_file;
-
-                if (class_exists('SEOContentStructure\\Admin\\AdminController')) {
-                    $admin_controller = new \SEOContentStructure\Admin\AdminController();
-                    $admin_controller->register($this->loader);
+                if (defined('WP_DEBUG') && WP_DEBUG) {
                     error_log("AdminController cargado y registrado con éxito");
-                } else {
-                    error_log("ERROR: El archivo existe pero la clase no se definió correctamente");
                 }
-            } else {
-                error_log("ERROR: Archivo no encontrado: $admin_controller_file");
+            } catch (\Throwable $e) {
+                error_log("Error al inicializar el controlador de administración: " . $e->getMessage());
+                error_log("Traza: " . $e->getTraceAsString());
             }
         }
     }
@@ -121,8 +111,16 @@ class Plugin
      */
     private function init_api()
     {
-        $rest_controller = new RestController();
-        $rest_controller->register($this->loader);
+        try {
+            $rest_controller = new RestController();
+            $rest_controller->register($this->loader);
+
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log("RestController cargado y registrado con éxito");
+            }
+        } catch (\Throwable $e) {
+            error_log("Error al inicializar el controlador REST: " . $e->getMessage());
+        }
     }
 
     /**
@@ -130,17 +128,21 @@ class Plugin
      */
     private function init_integrations()
     {
-        // Integración con Elementor (si está activo)
-        if (did_action('elementor/loaded')) {
-            $elementor_integration = new ElementorIntegration();
-            $elementor_integration->register($this->loader);
-        }
+        try {
+            // Integración con Elementor (si está activo)
+            if (did_action('elementor/loaded')) {
+                $elementor_integration = new ElementorIntegration();
+                $elementor_integration->register($this->loader);
+            }
 
-        // // Integración con WooCommerce (si está activo)
-        // if (class_exists('WooCommerce')) {
-        //     $woocommerce_integration = new WooCommerceIntegration();
-        //     $woocommerce_integration->register($this->loader);
-        // }
+            // Integración con WooCommerce (si está activo)
+            // if (class_exists('WooCommerce')) {
+            //     $woocommerce_integration = new WooCommerceIntegration();
+            //     $woocommerce_integration->register($this->loader);
+            // }
+        } catch (\Throwable $e) {
+            error_log("Error al inicializar integraciones: " . $e->getMessage());
+        }
     }
 
     /**
@@ -148,11 +150,19 @@ class Plugin
      */
     private function init_post_types()
     {
-        $post_type_factory = new PostTypeFactory();
-        $post_types = $post_type_factory->get_registered_post_types();
+        try {
+            $post_type_factory = new PostTypeFactory();
+            $post_types = $post_type_factory->get_registered_post_types();
 
-        foreach ($post_types as $post_type) {
-            $post_type->register($this->loader);
+            foreach ($post_types as $post_type) {
+                $post_type->register($this->loader);
+            }
+
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log("Post types registrados con éxito");
+            }
+        } catch (\Throwable $e) {
+            error_log("Error al inicializar tipos de contenido: " . $e->getMessage());
         }
     }
 
@@ -161,10 +171,16 @@ class Plugin
      */
     private function init_shortcodes()
     {
-        // Inicializar los shortcodes del plugin
-        require_once SCS_PLUGIN_DIR . 'includes/utilities/class-shortcodes.php';
-        $shortcodes = new \SEOContentStructure\Utilities\Shortcodes();
-        $shortcodes->register($this->loader);
+        try {
+            $shortcodes = new Shortcodes();
+            $shortcodes->register($this->loader);
+
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log("Shortcodes registrados con éxito");
+            }
+        } catch (\Throwable $e) {
+            error_log("Error al inicializar shortcodes: " . $e->getMessage());
+        }
     }
 
     /**
