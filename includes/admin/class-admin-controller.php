@@ -7,18 +7,41 @@
  * @subpackage Admin
  */
 
+/**
+ * Modificación de AdminController para incluir el PostTypeController
+ *
+ * Deberás añadir este código al método init_admin() en la clase Plugin
+ * o como una actualización a AdminController::register()
+ */
+
+// Dentro de AdminController::register() añade esto:
+
+// Inicializar controlador de tipos de contenido
+
+/**
+ * Código completo para actualizar AdminController:
+ */
+
 namespace SEOContentStructure\Admin;
 
 use SEOContentStructure\Core\Interfaces\Registrable;
 use SEOContentStructure\Core\Loader;
 use SEOContentStructure\PostTypes\PostTypeFactory;
 use SEOContentStructure\Admin\FieldGroupController;
+use SEOContentStructure\Admin\PostTypeController;
+use SEOContentStructure\Admin\SettingsPage;
 
 /**
  * Clase que maneja la interfaz de administración
  */
 class AdminController implements Registrable
 {
+    /**
+     * Registra los hooks con WordPress
+     *
+     * @param Loader $loader Instancia del cargador
+     */
+
     /**
      * Constructor
      */
@@ -43,6 +66,10 @@ class AdminController implements Registrable
         // Inicializar controlador de grupos de campos si es necesario
         $field_group_controller = new FieldGroupController();
         $field_group_controller->register($loader);
+
+        // Inicializar controlador de tipos de contenido
+        $post_type_controller = new PostTypeController();
+        $post_type_controller->register($loader);
 
         // Inicializar configuraciones generales
         $settings_page = new SettingsPage();

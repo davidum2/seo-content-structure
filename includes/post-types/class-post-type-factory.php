@@ -10,6 +10,7 @@
 namespace SEOContentStructure\PostTypes;
 
 use SEOContentStructure\PostTypes\PostType;
+use SEOContentStructure\Fields\FieldFactory;
 
 /**
  * Clase para crear instancias de tipos de contenido
@@ -36,8 +37,10 @@ class PostTypeFactory
      */
     protected function register_default_post_types()
     {
-        // Registrar el tipo de servicio
-        $this->register_service_post_type();
+        // Registrar el tipo de servicio si se ha añadido en el código
+        if (class_exists('\\SEOContentStructure\\PostTypes\\ServicePostType')) {
+            $this->register_service_post_type();
+        }
 
         // Cargar tipos de contenido personalizados desde la base de datos
         $this->load_custom_post_types();
@@ -48,6 +51,12 @@ class PostTypeFactory
      */
     protected function register_service_post_type()
     {
+        // Comprobar si ya existe este post type en la base de datos
+        // para evitar duplicados
+        if ($this->get_post_type_from_db('servicio')) {
+            return;
+        }
+
         $args = array(
             'labels' => array(
                 'name'          => __('Servicios', 'seo-content-structure'),
@@ -78,10 +87,48 @@ class PostTypeFactory
     }
 
     /**
+     * Obtiene información de un tipo de contenido de la base de datos
+     *
+     * @param string $post_type Nombre del tipo de contenido
+     * @return array|false Datos del tipo de contenido o false si no existe
+     */
+    protected function get_post_type_from_db($post_type)
+    {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'scs_post_types';
+
+        // Verificar si la tabla existe
+        if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") !== $table_name) {
+            return false;
+        }
+
+        $post_type_data = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT * FROM $table_name WHERE post_type = %s",
+                $post_type
+            ),
+            ARRAY_A
+        );
+
+        if (empty($post_type_data)) {
+            return false;
+        }
+
+        return $post_type_data;
+    }
+
+    /**
      * Carga los tipos de contenido personalizados desde la base de datos
      */
     protected function load_custom_post_types()
     {
+        // Utilizar caché si está disponible
+        $cached_post_types = get_transient('scs_post_types_cache');
+        if ($cached_post_types !== false) {
+            $this->post_types = array_merge($this->post_types, $cached_post_types);
+            return;
+        }
+
         global $wpdb;
         $table_name = $wpdb->prefix . 'scs_post_types';
 
@@ -100,6 +147,8 @@ class PostTypeFactory
             return;
         }
 
+        $loaded_post_types = array();
+
         // Registrar cada tipo de contenido
         foreach ($custom_post_types as $post_type_data) {
             $config = json_decode($post_type_data['config'], true);
@@ -111,26 +160,33 @@ class PostTypeFactory
             $post_type_name = $post_type_data['post_type'];
             $args = isset($config['args']) ? $config['args'] : array();
             $taxonomies = isset($config['taxonomies']) ? $config['taxonomies'] : array();
+            $schema_type = isset($config['schema_type']) ? $config['schema_type'] : '';
 
-            // Crear instancia de post type (usando genérico por ahora)
+            // Crear instancia de post type (usando genérico)
             $post_type = new GenericPostType($post_type_name, $args, $taxonomies);
 
-            // Establecer campos si existen
-            if (isset($config['fields']) && is_array($config['fields'])) {
-                // Crear instancias de campos
-                $field_factory = new \SEOContentStructure\Fields\FieldFactory();
-                $fields = $field_factory->create_fields($config['fields']);
+            // Establecer schema type si existe
+            if (!empty($schema_type)) {
+                $post_type->set_schema_type($schema_type);
+            }
+
+            // Establecer campos si están definidos en el grupo de campos
+            $field_group_controller = new \SEOContentStructure\Admin\FieldGroupController();
+            $fields = $field_group_controller->get_fields_for_post_type($post_type_name);
+
+            if (!empty($fields)) {
                 $post_type->set_fields($fields);
             }
 
-            // Establecer schema type si existe
-            if (isset($config['schema_type'])) {
-                $post_type->set_schema_type($config['schema_type']);
-            }
-
             // Registrar el post type
-            $this->post_types[$post_type_name] = $post_type;
+            $loaded_post_types[$post_type_name] = $post_type;
         }
+
+        // Fusionar con los post types existentes (prioritizando los nuevos)
+        $this->post_types = array_merge($this->post_types, $loaded_post_types);
+
+        // Almacenar en caché para futuras cargas
+        set_transient('scs_post_types_cache', $loaded_post_types, HOUR_IN_SECONDS);
     }
 
     /**
@@ -187,35 +243,47 @@ class PostTypeFactory
             return new \WP_Error('invalid_post_type', __('El slug debe contener solo letras minúsculas, números, guiones y guiones bajos.', 'seo-content-structure'));
         }
 
+        // Verificar que no sea un tipo de contenido nativo de WordPress
+        $native_post_types = array('post', 'page', 'attachment', 'revision', 'nav_menu_item', 'custom_css', 'customize_changeset', 'oembed_cache', 'user_request', 'wp_block', 'wp_template', 'wp_template_part');
+        if (in_array($data['post_type'], $native_post_types)) {
+            return new \WP_Error('reserved_post_type', __('No puedes usar un tipo de contenido reservado de WordPress.', 'seo-content-structure'));
+        }
+
         // Preparar datos para guardar
         $post_type_name = sanitize_key($data['post_type']);
+
+        // Verificar que es un nombre válido para un post type
+        if (strlen($post_type_name) < 1 || strlen($post_type_name) > 20) {
+            return new \WP_Error('invalid_post_type_length', __('El nombre del tipo de contenido debe tener entre 1 y 20 caracteres.', 'seo-content-structure'));
+        }
+
+        // Preparar la configuración
         $config = array(
             'args'       => isset($data['args']) ? $data['args'] : array(),
             'taxonomies' => isset($data['taxonomies']) ? $data['taxonomies'] : array(),
-            'fields'     => isset($data['fields']) ? $data['fields'] : array(),
-            'schema_type' => isset($data['schema_type']) ? sanitize_text_field($data['schema_type']) : '',
+            'schema_type' => isset($data['schema_type']) ? $data['schema_type'] : '',
         );
+
+        // Marcar como activo por defecto si no se especifica
+        if (!isset($config['args']['active'])) {
+            $config['args']['active'] = true;
+        }
 
         $save_data = array(
             'post_type' => $post_type_name,
             'config'    => wp_json_encode($config),
-            'active'    => isset($data['active']) ? 1 : 0,
+            'active'    => isset($data['args']['active']) && $data['args']['active'] ? 1 : 0,
         );
 
         // Determinar si es una actualización o inserción
-        $existing = $wpdb->get_var(
-            $wpdb->prepare(
-                "SELECT id FROM $table_name WHERE post_type = %s",
-                $post_type_name
-            )
-        );
+        $existing = $this->get_post_type_from_db($post_type_name);
 
         if ($existing) {
             // Actualizar
             $result = $wpdb->update(
                 $table_name,
                 $save_data,
-                array('id' => $existing),
+                array('id' => $existing['id']),
                 array('%s', '%s', '%d'),
                 array('%d')
             );
@@ -224,7 +292,7 @@ class PostTypeFactory
                 return new \WP_Error('db_error', __('Error al actualizar el tipo de contenido.', 'seo-content-structure'));
             }
 
-            $post_type_id = $existing;
+            $post_type_id = $existing['id'];
         } else {
             // Insertar
             $result = $wpdb->insert(
@@ -242,6 +310,9 @@ class PostTypeFactory
 
         // Limpiar caché
         delete_transient('scs_post_types_cache');
+
+        // Limpiar reglas de rewriting para el nuevo post type
+        flush_rewrite_rules();
 
         return $post_type_id;
     }
@@ -265,6 +336,9 @@ class PostTypeFactory
 
         // Limpiar caché
         delete_transient('scs_post_types_cache');
+
+        // Limpiar reglas de rewriting
+        flush_rewrite_rules();
 
         return $result !== false;
     }
