@@ -23,7 +23,7 @@ if (!defined('ABSPATH')) {
 function scs_log($message)
 {
     if (defined('WP_DEBUG') && WP_DEBUG) {
-         'SCS Debug: ' . $message);
+        error_log('SCS Debug: ' . $message);
     }
 }
 
