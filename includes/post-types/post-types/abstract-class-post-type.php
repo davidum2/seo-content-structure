@@ -270,6 +270,15 @@ abstract class PostType implements Registrable
     public function register_post_type()
     {
         register_post_type($this->post_type, $this->args);
+
+        // Verificar registro
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            if (post_type_exists($this->post_type)) {
+                error_log("Post type {$this->post_type} registrado correctamente");
+            } else {
+                error_log("ERROR: Post type {$this->post_type} NO se registró correctamente");
+            }
+        }
     }
 
     /**

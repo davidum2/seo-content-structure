@@ -166,6 +166,26 @@ class Plugin
         }
     }
 
+    public function register_post_types_direct()
+    {
+        try {
+            $post_type_factory = new PostTypeFactory();
+            $post_types = $post_type_factory->get_registered_post_types();
+
+            foreach ($post_types as $post_type) {
+                // Llamada directa al método sin pasar por el loader
+                $post_type->register_post_type();
+
+                // Registrar taxonomías si existen
+                if (!empty($post_type->get_taxonomies())) {
+                    $post_type->register_taxonomies();
+                }
+            }
+        } catch (\Throwable $e) {
+            error_log("Error al registrar tipos de contenido: " . $e->getMessage());
+        }
+    }
+
     /**
      * Inicializa los shortcodes
      */

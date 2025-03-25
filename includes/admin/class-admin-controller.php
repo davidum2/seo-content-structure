@@ -1,27 +1,5 @@
 <?php
 
-/**
- * Controlador de la administración del plugin
- *
- * @package SEOContentStructure
- * @subpackage Admin
- */
-
-/**
- * Modificación de AdminController para incluir el PostTypeController
- *
- * Deberás añadir este código al método init_admin() en la clase Plugin
- * o como una actualización a AdminController::register()
- */
-
-// Dentro de AdminController::register() añade esto:
-
-// Inicializar controlador de tipos de contenido
-
-/**
- * Código completo para actualizar AdminController:
- */
-
 namespace SEOContentStructure\Admin;
 
 use SEOContentStructure\Core\Interfaces\Registrable;
@@ -30,6 +8,7 @@ use SEOContentStructure\PostTypes\PostTypeFactory;
 use SEOContentStructure\Admin\FieldGroupController;
 use SEOContentStructure\Admin\PostTypeController;
 use SEOContentStructure\Admin\SettingsPage;
+use WP_Error;
 
 /**
  * Clase que maneja la interfaz de administración
@@ -40,10 +19,6 @@ class AdminController implements Registrable
      * Registra los hooks con WordPress
      *
      * @param Loader $loader Instancia del cargador
-     */
-
-    /**
-     * Constructor
      */
     public function __construct()
     {
@@ -81,6 +56,9 @@ class AdminController implements Registrable
         // Añadir notificaciones y mensajes de ayuda
         $loader->add_action('admin_notices', $this, 'admin_notices');
         $loader->add_action('admin_head', $this, 'add_help_tabs');
+
+        // Agregamos la acción para procesar el formulario del post type builder.
+        $loader->add_action('admin_post_scs_register_post_type', $this, 'process_post_type_form');
     }
 
     /**
@@ -112,7 +90,6 @@ class AdminController implements Registrable
         // Submenú: Grupos de campos
         add_submenu_page(
             'seo-content-structure',
-            __('Grupos de Campos', 'seo-content-structure'),
             __('Grupos de Campos', 'seo-content-structure'),
             'manage_options',
             'scs-field-groups',
@@ -246,72 +223,7 @@ class AdminController implements Registrable
         return array_merge($custom_links, $links);
     }
 
-    /**
-     * Muestra notificaciones administrativas
-     */
-    public function admin_notices()
-    {
-        // Verificar si hay notificaciones en la sesión
-        if (isset($_GET['scs_notice'])) {
-            $notice_type = isset($_GET['scs_notice_type']) ? sanitize_text_field($_GET['scs_notice_type']) : 'success';
-            $message = '';
 
-            switch ($_GET['scs_notice']) {
-                case 'saved':
-                    $message = __('Los cambios se han guardado correctamente.', 'seo-content-structure');
-                    break;
-
-                case 'error':
-                    $message = __('Ha ocurrido un error al guardar los cambios.', 'seo-content-structure');
-                    $notice_type = 'error';
-                    break;
-
-                case 'deleted':
-                    $message = __('Elemento eliminado correctamente.', 'seo-content-structure');
-                    break;
-            }
-
-            if (! empty($message)) {
-                printf(
-                    '<div class="notice notice-%s is-dismissible"><p>%s</p></div>',
-                    esc_attr($notice_type),
-                    esc_html($message)
-                );
-            }
-        }
-
-        // Verificar requisitos del plugin
-        $this->check_plugin_requirements();
-    }
-
-    /**
-     * Verifica los requisitos del plugin y muestra notificaciones
-     */
-    private function check_plugin_requirements()
-    {
-        // Verificar versión de PHP
-        if (version_compare(PHP_VERSION, '7.0', '<')) {
-            echo '<div class="notice notice-error">';
-            echo '<p>' . sprintf(
-                __('%s requiere PHP 7.0 o superior. Tu servidor está ejecutando PHP %s.', 'seo-content-structure'),
-                '<strong>SEO Content Structure</strong>',
-                PHP_VERSION
-            ) . '</p>';
-            echo '</div>';
-        }
-
-        // Verificar versión de WordPress
-        global $wp_version;
-        if (version_compare($wp_version, '5.0', '<')) {
-            echo '<div class="notice notice-error">';
-            echo '<p>' . sprintf(
-                __('%s requiere WordPress 5.0 o superior. Tu sitio está ejecutando WordPress %s.', 'seo-content-structure'),
-                '<strong>SEO Content Structure</strong>',
-                $wp_version
-            ) . '</p>';
-            echo '</div>';
-        }
-    }
 
     /**
      * Añade pestañas de ayuda en las páginas del plugin
@@ -399,5 +311,180 @@ class AdminController implements Registrable
     public function render_settings_page()
     {
         include_once SCS_PLUGIN_DIR . 'includes/admin/views/settings-page.php';
+    }
+
+    /**
+     * Procesa el formulario de creación de tipos de contenido.
+     *
+     * @return void
+     */
+    public function process_post_type_form()
+    {
+        // Verificar nonce para seguridad
+        if (! isset($_POST['scs_post_type_nonce']) || ! wp_verify_nonce($_POST['scs_post_type_nonce'], 'scs_register_post_type')) {
+            wp_die(__('¡Vaya, algo salió mal! Por favor, recarga la página e inténtalo de nuevo.', 'seo-content-structure'));
+        }
+
+        // 1. Sanitizar y validar los datos del formulario
+        $nombre = sanitize_text_field($_POST['nombre']);
+        $singular = sanitize_text_field($_POST['singular']);
+        $plural = sanitize_text_field($_POST['plural']);
+        $descripcion = sanitize_textarea_field($_POST['descripcion']);
+        $public = isset($_POST['public']) ? true : false;
+        $show_ui = isset($_POST['show_ui']) ? true : false;
+        $show_in_menu = isset($_POST['show_in_menu']) ? true : false;
+        $supports = isset($_POST['supports']) ? $_POST['supports'] : array(); // Ya es un array, pero hay que sanearlo.
+
+        // Sanear el array de supports.  Esto asegura que solo se acepten los valores permitidos.
+        $supports = array_intersect($supports, array('title', 'editor', 'author', 'thumbnail', 'excerpt', 'comments', 'custom-fields', 'revisions', 'post-formats'));
+
+        // Validar que el nombre del post type sea válido (debe ser una cadena y no estar vacío)
+        if (empty($nombre) || ! is_string($nombre)) {
+            $this->add_admin_notice('error', __('El nombre del tipo de contenido es obligatorio y debe ser una cadena.', 'seo-content-structure'));
+            $this->redirect_to_post_types_page();
+            return;
+        }
+
+        // Validar que singular y plural no estén vacíos
+        if (empty($singular) || empty($plural)) {
+            $this->add_admin_notice('error', __('Los nombres singular y plural son obligatorios.', 'seo-content-structure'));
+            $this->redirect_to_post_types_page();
+            return;
+        }
+
+        // 2. Construir el array de argumentos para register_post_type
+        $args = array(
+            'labels' => array(
+                'name' => $plural,
+                'singular_name' => $singular,
+                'menu_name' => $plural,
+                'admin_bar_menu_name' => $singular,
+                'add_new' => __('Añadir Nuevo', 'seo-content-structure') . ' ' . $singular,
+                'add_new_item' => __('Añadir Nuevo', 'seo-content-structure') . ' ' . $singular,
+                'edit_item' => __('Editar', 'seo-content-structure') . ' ' . $singular,
+                'new_item' => __('Nuevo', 'seo-content-structure') . ' ' . $singular,
+                'view_item' => __('Ver', 'seo-content-structure') . ' ' . $singular,
+                'search_items' => __('Buscar', 'seo-content-structure') . ' ' . $plural,
+                'not_found' => __('No se encontraron', 'seo-content-structure') . ' ' . $plural,
+                'not_found_in_trash' => __('No se encontraron', 'seo-content-structure') . ' ' . $plural . ' en la papelera',
+                'all_items' => __('Todos los', 'seo-content-structure') . ' ' . $plural,
+            ),
+            'description' => $descripcion,
+            'public' => $public,
+            'show_ui' => $show_ui,
+            'show_in_menu' => $show_in_menu,
+            'menu_position' => 20, // Puedes ajustar la posición en el menú
+            'supports' => $supports,
+            'has_archive' => true,
+            'rewrite' => array('slug' => $nombre), // Usa el nombre como slug por defecto
+            'capability_type' => 'post', // Esto es común, pero puedes ajustarlo
+        );
+
+        // 3. Registrar el post type
+        $result = register_post_type($nombre, $args);
+
+        if (is_wp_error($result)) {
+            // Manejar el error de registro
+            $this->add_admin_notice('error', __('Error al registrar el tipo de contenido: ', 'seo-content-structure') . $result->get_error_message());
+        } else {
+            // Éxito: opcionalmente, guardar en la base de datos para persistencia
+            $this->save_post_type_to_db($nombre, $args);
+            $this->add_admin_notice('success', __('Tipo de contenido registrado correctamente.', 'seo-content-structure'));
+        }
+
+        // 4. Redirigir de vuelta a la página de tipos de contenido
+        $this->redirect_to_post_types_page();
+    }
+
+    /**
+     * Guarda la configuración del post type en la base de datos.
+     *
+     * @param string $nombre Nombre del post type.
+     * @param array $args Argumentos del post type.
+     * @return void
+     */
+    private function save_post_type_to_db($nombre, $args)
+    {
+        // Obtiene los post types existentes
+        $existing_post_types = get_option('scs_registered_post_types', array());
+        // Agrega el nuevo post type al array
+        $existing_post_types[$nombre] = $args;
+        // Guarda el array actualizado en la base de datos
+        update_option('scs_registered_post_types', $existing_post_types);
+    }
+
+    /**
+     * Añade un mensaje de notificación a mostrar en el admin.
+     *
+     * @param string $tipo Tipo de notificación (success, error, warning).
+     * @param string $mensaje Mensaje a mostrar.
+     * @return void
+     */
+    private function add_admin_notice($tipo, $mensaje)
+    {
+        // Usa una variable global para almacenar el mensaje y tipo
+        global $scs_admin_notices;
+        $scs_admin_notices[] = array(
+            'tipo' => $tipo,
+            'mensaje' => $mensaje,
+        );
+    }
+
+    /**
+     * Redirige a la página de tipos de contenido.
+     *
+     * @return void
+     */
+    private function redirect_to_post_types_page()
+    {
+        wp_safe_redirect(admin_url('admin.php?page=scs-post-types'));
+        exit;
+    }
+
+    /**
+     * Muestra las notificaciones administrativas almacenadas.
+     *
+     * Esta función debe ser llamada en el hook 'admin_notices'.
+     *
+     * @return void
+     */
+    public function admin_notices()
+    {
+        global $scs_admin_notices;
+
+        if (isset($scs_admin_notices) && is_array($scs_admin_notices)) {
+            foreach ($scs_admin_notices as $noticia) {
+                printf(
+                    '<div class="notice notice-%s is-dismissible"><p>%s</p></div>',
+                    esc_attr($noticia['tipo']),
+                    esc_html($noticia['mensaje'])
+                );
+            }
+            // Limpia el array de notificaciones para no mostrarlas de nuevo.
+            $scs_admin_notices = array();
+        }
+        // Verificar requisitos del plugin
+        $this->check_plugin_requirements();
+    }
+
+    /**
+     * Renderiza la página de tipos de contenido
+     */
+    public function render_post_types_page()
+    {
+        // Incluye el formulario para crear/editar post types.
+        include_once SCS_PLUGIN_DIR . 'includes/admin/views/post-type-builder.php';
+
+        // Opcionalmente, podrías mostrar aquí la lista de post types registrados desde la BD.
+        $registered_post_types = get_option('scs_registered_post_types', array());
+        if (! empty($registered_post_types)) {
+            echo '<h3>' . __('Tipos de Contenido Registrados', 'seo-content-structure') . '</h3>';
+            echo '<ul>';
+            foreach ($registered_post_types as $nombre => $args) {
+                echo '<li><strong>' . esc_html($nombre) . '</strong>: ' . esc_html($args['labels']['singular_name']) . '</li>';
+                // Podrías mostrar más detalles de cada post type aquí.
+            }
+            echo '</ul>';
+        }
     }
 }
