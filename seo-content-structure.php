@@ -23,7 +23,10 @@ if (!defined('ABSPATH')) {
 function scs_log($message)
 {
     if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('SCS Debug: ' . $message);
+        // Solo registrar mensajes de error
+        if (strpos(strtolower($message), 'error') !== false) {
+            error_log('SCS Debug: ' . $message);
+        }
     }
 }
 
@@ -33,8 +36,6 @@ define('SCS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SCS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('SCS_PLUGIN_BASENAME', plugin_basename(__FILE__));
 define('SCS_PLUGIN_FILE', __FILE__);
-
-scs_log('Plugin inicializándose - constantes definidas');
 
 /**
  * Función para autocargar las clases del plugin
@@ -169,16 +170,11 @@ add_action('plugins_loaded', 'scs_init_plugin', 20);
  */
 function scs_init_plugin()
 {
-    scs_log('>>> INICIO scs_init_plugin()');
-
     // Carga de traducciones
     load_plugin_textdomain('seo-content-structure', false, dirname(SCS_PLUGIN_BASENAME) . '/languages');
-    scs_log('Traducciones cargadas');
 
     // Inicializar el plugin principal
     try {
-        scs_log('Intentando crear instancia de Plugin');
-
         // Verificar que las clases clave existen
         $core_files = [
             SCS_PLUGIN_DIR . 'includes/core/class-plugin.php',
@@ -191,15 +187,15 @@ function scs_init_plugin()
             }
         }
 
-        // Crear instancia del plugin
-        $plugin = new \SEOContentStructure\Core\Plugin();
-        scs_log('Instancia de Plugin creada correctamente');
+        // Inicializar el gestor de post types
+        $post_type_manager = new \SEOContentStructure\Admin\PostTypeManager();
 
-        scs_log('Llamando al método init() de Plugin');
+        // Crear instancia del plugin principal
+        $plugin = new \SEOContentStructure\Core\Plugin();
+
         $plugin->init();
-        scs_log('Plugin inicializado correctamente');
     } catch (\Throwable $e) {
-        // Log error
+        // Registrar el error
         scs_log('ERROR: ' . $e->getMessage());
         scs_log('Traza: ' . $e->getTraceAsString());
 
@@ -212,8 +208,6 @@ function scs_init_plugin()
 <?php
         });
     }
-
-    scs_log('<<< FIN scs_init_plugin()');
 }
 
 // Registrar el menú de administración directamente como fallback

@@ -61,6 +61,13 @@ abstract class PostType implements Registrable
     protected $schema_type = '';
 
     /**
+     * Si el tipo de contenido está activo
+     *
+     * @var bool
+     */
+    protected $is_active = true;
+
+    /**
      * Constructor
      *
      * @param string $post_type  Nombre del post type
@@ -72,6 +79,11 @@ abstract class PostType implements Registrable
         $this->post_type = $post_type;
         $this->args = $args;
         $this->taxonomies = $taxonomies;
+
+        // Establecer estado activo desde args si existe
+        if (isset($args['active'])) {
+            $this->is_active = (bool) $args['active'];
+        }
 
         // Configuración predeterminada
         $this->set_default_args();
@@ -87,7 +99,7 @@ abstract class PostType implements Registrable
             'public'              => true,
             'show_ui'             => true,
             'show_in_menu'        => true,
-            'show_in_admin_bar'   => true,
+            'show_in_admin_bar'   => true,  // Asegurar que esto sea true
             'show_in_nav_menus'   => true,
             'show_in_rest'        => true,
             'supports'            => array('title', 'editor', 'thumbnail', 'excerpt', 'author', 'comments'),
@@ -99,9 +111,16 @@ abstract class PostType implements Registrable
             'exclude_from_search' => false,
             'publicly_queryable'  => true,
             'capability_type'     => 'post',
+            'rewrite'             => array('slug' => $this->post_type), // Asegurar reescritura URL correcta
+            'active'              => $this->is_active, // Incluir estado activo en args
         );
 
         $this->args = wp_parse_args($this->args, $defaults);
+
+        // Asegurar que el rewrite tenga slug
+        if (is_array($this->args['rewrite']) && !isset($this->args['rewrite']['slug'])) {
+            $this->args['rewrite']['slug'] = $this->post_type;
+        }
     }
 
     /**
@@ -155,6 +174,29 @@ abstract class PostType implements Registrable
         $this->labels = isset($this->args['labels']) ? wp_parse_args($this->args['labels'], $default_labels) : $default_labels;
 
         $this->args['labels'] = $this->labels;
+    }
+
+    /**
+     * Establece si el tipo de contenido está activo
+     *
+     * @param bool $is_active Estado activo
+     * @return self
+     */
+    public function set_is_active($is_active)
+    {
+        $this->is_active = (bool) $is_active;
+        $this->args['active'] = $this->is_active;
+        return $this;
+    }
+
+    /**
+     * Verifica si el tipo de contenido está activo
+     *
+     * @return bool
+     */
+    public function is_active()
+    {
+        return $this->is_active;
     }
 
     /**
@@ -269,7 +311,22 @@ abstract class PostType implements Registrable
      */
     public function register_post_type()
     {
-        register_post_type($this->post_type, $this->args);
+        // Solo registrar si está activo
+        if (!$this->is_active) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log("Post type {$this->post_type} no se registró porque está inactivo");
+            }
+            return;
+        }
+
+        // Asegurar que tenemos un array de argumentos válido
+        $args = $this->args;
+        if (!isset($args['labels']) || !is_array($args['labels'])) {
+            $this->set_labels();
+            $args = $this->args;
+        }
+
+        register_post_type($this->post_type, $args);
 
         // Verificar registro
         if (defined('WP_DEBUG') && WP_DEBUG) {
@@ -286,6 +343,11 @@ abstract class PostType implements Registrable
      */
     public function register_taxonomies()
     {
+        // Solo registrar si el post type está activo
+        if (!$this->is_active) {
+            return;
+        }
+
         foreach ($this->taxonomies as $taxonomy => $args) {
             if (! taxonomy_exists($taxonomy)) {
                 $labels = isset($args['labels']) ? $args['labels'] : array();
@@ -345,7 +407,8 @@ abstract class PostType implements Registrable
      */
     public function register_meta_boxes()
     {
-        if (empty($this->fields)) {
+        // No registrar meta boxes si el post type está inactivo
+        if (!$this->is_active || empty($this->fields)) {
             return;
         }
 
@@ -420,6 +483,11 @@ abstract class PostType implements Registrable
      */
     public function save_meta_values($post_id)
     {
+        // No procesar si el post type está inactivo
+        if (!$this->is_active) {
+            return;
+        }
+
         // Verificar nonce
         if (
             ! isset($_POST["scs_{$this->post_type}_meta_box_nonce"]) ||
@@ -461,7 +529,8 @@ abstract class PostType implements Registrable
      */
     public function register_schema()
     {
-        if (empty($this->schema_type)) {
+        // No registrar schema si el post type está inactivo
+        if (!$this->is_active || empty($this->schema_type)) {
             return;
         }
 
@@ -518,7 +587,8 @@ abstract class PostType implements Registrable
      */
     public function register_rest_fields()
     {
-        if (empty($this->fields)) {
+        // No registrar campos REST si el post type está inactivo
+        if (!$this->is_active || empty($this->fields)) {
             return;
         }
 
@@ -577,6 +647,14 @@ abstract class PostType implements Registrable
      */
     public function register(Loader $loader)
     {
+        // No registrar hooks si el post type está inactivo
+        if (!$this->is_active) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log("No se registran hooks para {$this->post_type} porque está inactivo");
+            }
+            return;
+        }
+
         // Registrar el post type
         $loader->add_action('init', $this, 'register_post_type');
 

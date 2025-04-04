@@ -41,6 +41,7 @@ class AdminController implements Registrable
      */
     public function register(Loader $loader)
     {
+
         // Hooks principales de administración
         $this->register_admin_hooks($loader);
 
@@ -769,11 +770,29 @@ class AdminController implements Registrable
      */
     public function render_post_types_page()
     {
-        include_once SCS_PLUGIN_DIR . 'includes/admin/views/post-type-builder.php';
+        // Check if we're in edit mode
+        $action = isset($_GET['action']) ? sanitize_text_field($_GET['action']) : 'list';
+        $post_type = isset($_GET['post_type']) ? sanitize_key($_GET['post_type']) : '';
 
-        // Mostrar tipos de contenido registrados
-        $this->display_registered_post_types();
+        // Make sure we have access to the factory
+        if (!isset($this->post_type_factory) || !($this->post_type_factory instanceof \SEOContentStructure\PostTypes\PostTypeFactory)) {
+            $this->post_type_factory = new \SEOContentStructure\PostTypes\PostTypeFactory();
+        }
+
+        try {
+            // Load the appropriate view
+            include_once SCS_PLUGIN_DIR . 'includes/admin/views/post-type-builder.php';
+        } catch (\Exception $e) {
+            echo '<div class="notice notice-error"><p>';
+            echo 'Error loading post type page: ' . esc_html($e->getMessage());
+            echo '</p></div>';
+
+            // Log the error for debugging
+            error_log('SEO Content Structure - Error loading post type page: ' . $e->getMessage());
+            error_log('Trace: ' . $e->getTraceAsString());
+        }
     }
+
 
     /**
      * Muestra los tipos de contenido registrados

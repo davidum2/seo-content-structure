@@ -31,6 +31,9 @@ class Activator
 
         // Crear directorio de caché si no existe
         self::create_cache_directory();
+
+        // Limpiar la caché de reglas de reescritura
+        flush_rewrite_rules();
     }
 
     /**

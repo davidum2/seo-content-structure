@@ -12,6 +12,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// --- (Código inicial para obtener datos, $post_type_factory, $action, etc. - sin cambios) ---
 // Obtener controlador de tipos de contenido
 $post_type_factory = new \SEOContentStructure\PostTypes\PostTypeFactory();
 
@@ -25,19 +26,63 @@ $is_edit_mode = ($action === 'edit' && !empty($post_type)) || $action === 'new';
 // Obtener datos del tipo de contenido si estamos en modo edición
 $post_type_obj = null;
 $post_type_data = array();
+// Establecer defaults para modo 'new' o si falla la carga
+$post_type_defaults = [
+    'args' => [
+        'public' => true,
+        'show_ui' => true,
+        'show_in_menu' => true,
+        'has_archive' => true,
+        'hierarchical' => false,
+        'show_in_rest' => true,
+        'active' => true,
+        'supports' => ['title', 'editor', 'thumbnail'],
+        'menu_icon' => 'dashicons-admin-post',
+        'labels' => ['singular_name' => '', 'name' => '']
+    ],
+    'taxonomies' => [],
+    'fields' => [],
+    'schema_type' => ''
+];
+
 if ($action === 'edit' && !empty($post_type)) {
     $post_type_obj = $post_type_factory->get_post_type($post_type);
 
     if ($post_type_obj) {
+        // Fusionar datos guardados con defaults para asegurar que todas las claves existan
+        $db_args = $post_type_obj->get_args();
         $post_type_data = array(
             'post_type' => $post_type_obj->get_post_type(),
-            'args' => $post_type_obj->get_args(),
+            // Asegurar que los booleanos se carguen correctamente
+            'args' => wp_parse_args($db_args, $post_type_defaults['args']),
             'taxonomies' => $post_type_obj->get_taxonomies(),
             'fields' => $post_type_obj->get_fields(),
             'schema_type' => $post_type_obj->get_schema_type()
         );
+        // Forzar booleanos correctos desde $db_args si existen
+        foreach (['public', 'show_ui', 'show_in_menu', 'has_archive', 'hierarchical', 'show_in_rest', 'active'] as $bool_key) {
+            if (isset($db_args[$bool_key])) {
+                $post_type_data['args'][$bool_key] = filter_var($db_args[$bool_key], FILTER_VALIDATE_BOOLEAN);
+            }
+        }
+        if (isset($db_args['supports'])) {
+            $post_type_data['args']['supports'] = $db_args['supports'];
+        }
+        if (isset($db_args['menu_icon'])) {
+            $post_type_data['args']['menu_icon'] = $db_args['menu_icon'];
+        }
+        if (isset($db_args['labels'])) {
+            $post_type_data['args']['labels'] = $db_args['labels'];
+        }
+    } else {
+        // Si no se pudo cargar el objeto (ej. error en DB), usar defaults
+        $post_type_data = $post_type_defaults;
+        $post_type_data['post_type'] = $post_type; // Mantener el slug si venía en URL
     }
+} else if ($action === 'new') {
+    $post_type_data = $post_type_defaults;
 }
+
 
 // Lista de taxonomías disponibles
 $taxonomies = \SEOContentStructure\Utilities\Helper::get_taxonomies(true);
@@ -49,15 +94,17 @@ $schema_types = \SEOContentStructure\Utilities\Helper::get_schema_types();
 $field_types = \SEOContentStructure\Utilities\Helper::get_field_types();
 
 // Verificar si hay mensaje de error
-$error_message = isset($_GET['error']) ? sanitize_text_field($_GET['error']) : '';
+$error_message = isset($_GET['error']) ? sanitize_text_field(urldecode($_GET['error'])) : '';
+
 
 // Verificar si hay mensaje de éxito
 $success_message = isset($_GET['message']) ? sanitize_text_field($_GET['message']) : '';
 
+// --- (Resto del código para la vista de lista - sin cambios) ---
+
 ?>
 <div class="wrap scs-admin-page scs-post-types-page">
     <?php if (!$is_edit_mode) : ?>
-        <!-- LISTADO DE TIPOS DE CONTENIDO -->
         <h1 class="wp-heading-inline"><?php echo esc_html__('Tipos de Contenido', 'seo-content-structure'); ?></h1>
         <a href="<?php echo esc_url(admin_url('admin.php?page=scs-post-types&action=new')); ?>" class="page-title-action"><?php echo esc_html__('Añadir Nuevo', 'seo-content-structure'); ?></a>
         <hr class="wp-header-end">
@@ -83,9 +130,18 @@ $success_message = isset($_GET['message']) ? sanitize_text_field($_GET['message'
         <?php endif; ?>
 
         <div class="scs-post-types-list">
-            <?php $registered_post_types = $post_type_factory->get_registered_post_types(); ?>
+            <?php
+            // Asegurarse de que $registered_post_types es un array antes de usarlo
+            $registered_post_types_raw = $post_type_factory->get_registered_post_types();
+            $registered_post_types = is_array($registered_post_types_raw) ? $registered_post_types_raw : [];
 
-            <?php if (empty($registered_post_types)) : ?>
+            // Filtrar CPTs nativos para no mostrarlos en la lista editable
+            $custom_post_types_only = array_filter($registered_post_types, function ($pt) {
+                return !in_array($pt->get_post_type(), array('post', 'page', 'attachment', 'revision', 'nav_menu_item', 'custom_css', 'customize_changeset', 'oembed_cache', 'user_request', 'wp_block', 'wp_template', 'wp_template_part', 'wp_global_styles', 'wp_navigation', 'wp_font_family', 'wp_font_face', 'e-floating-buttons', 'elementor_library'));
+            });
+            ?>
+
+            <?php if (empty($custom_post_types_only)) : ?>
                 <div class="scs-no-items-message">
                     <p><?php echo esc_html__('No se encontraron tipos de contenido personalizados.', 'seo-content-structure'); ?></p>
                     <a href="<?php echo esc_url(admin_url('admin.php?page=scs-post-types&action=new')); ?>" class="button button-primary"><?php echo esc_html__('Crear el primero', 'seo-content-structure'); ?></a>
@@ -103,17 +159,12 @@ $success_message = isset($_GET['message']) ? sanitize_text_field($_GET['message'
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($registered_post_types as $pt) :
-                            // Saltamos los tipos de contenido nativos de WordPress
-                            if (in_array($pt->get_post_type(), array('post', 'page', 'attachment'))) {
-                                continue;
-                            }
-                        ?>
+                        <?php foreach ($custom_post_types_only as $pt) : ?>
                             <tr>
                                 <td class="column-title column-primary">
                                     <strong>
                                         <a href="<?php echo esc_url(admin_url('admin.php?page=scs-post-types&action=edit&post_type=' . $pt->get_post_type())); ?>" class="row-title">
-                                            <?php echo esc_html($pt->get_args()['labels']['singular_name']); ?>
+                                            <?php echo esc_html(isset($pt->get_args()['labels']['singular_name']) ? $pt->get_args()['labels']['singular_name'] : $pt->get_post_type()); ?>
                                         </a>
                                     </strong>
                                     <div class="row-actions">
@@ -133,10 +184,12 @@ $success_message = isset($_GET['message']) ? sanitize_text_field($_GET['message'
                                 <td>
                                     <?php
                                     $pt_taxonomies = $pt->get_taxonomies();
-                                    if (!empty($pt_taxonomies)) {
+                                    if (!empty($pt_taxonomies) && is_array($pt_taxonomies)) {
                                         $tax_names = array();
                                         foreach ($pt_taxonomies as $tax_name => $tax_args) {
-                                            $tax_names[] = isset($tax_args['labels']['singular_name']) ? $tax_args['labels']['singular_name'] : $tax_name;
+                                            // Intentar obtener la etiqueta singular, si no, usar el nombre
+                                            $tax_obj = get_taxonomy($tax_name);
+                                            $tax_names[] = $tax_obj ? $tax_obj->labels->singular_name : (isset($tax_args['labels']['singular_name']) ? $tax_args['labels']['singular_name'] : $tax_name);
                                         }
                                         echo esc_html(implode(', ', $tax_names));
                                     } else {
@@ -147,7 +200,11 @@ $success_message = isset($_GET['message']) ? sanitize_text_field($_GET['message'
                                 <td><?php echo count($pt->get_fields()); ?></td>
                                 <td><?php echo $pt->get_schema_type() ? esc_html($pt->get_schema_type()) : '—'; ?></td>
                                 <td>
-                                    <?php if (isset($pt->get_args()['active']) && $pt->get_args()['active']) : ?>
+                                    <?php
+                                    // Usar is_active() que debería obtener el valor de la DB
+                                    $is_active = method_exists($pt, 'is_active') ? $pt->is_active() : (isset($pt->get_args()['active']) && $pt->get_args()['active']);
+                                    ?>
+                                    <?php if ($is_active) : ?>
                                         <span class="scs-status-active"><?php echo esc_html__('Activo', 'seo-content-structure'); ?></span>
                                     <?php else : ?>
                                         <span class="scs-status-inactive"><?php echo esc_html__('Inactivo', 'seo-content-structure'); ?></span>
@@ -161,11 +218,10 @@ $success_message = isset($_GET['message']) ? sanitize_text_field($_GET['message'
         </div>
 
     <?php else : ?>
-        <!-- FORMULARIO DE EDICIÓN DE TIPO DE CONTENIDO -->
         <?php if ($action === 'new') : ?>
             <h1><?php echo esc_html__('Añadir Tipo de Contenido', 'seo-content-structure'); ?></h1>
         <?php else : ?>
-            <h1><?php echo esc_html__('Editar Tipo de Contenido', 'seo-content-structure'); ?></h1>
+            <h1><?php echo esc_html__('Editar Tipo de Contenido', 'seo-content-structure'); ?>: <?php echo esc_html(isset($post_type_data['args']['labels']['singular_name']) ? $post_type_data['args']['labels']['singular_name'] : $post_type); ?></h1>
         <?php endif; ?>
 
         <?php if (!empty($error_message)) : ?>
@@ -176,7 +232,7 @@ $success_message = isset($_GET['message']) ? sanitize_text_field($_GET['message'
 
         <form id="scs-post-type-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
             <input type="hidden" name="action" value="scs_save_post_type">
-            <input type="hidden" name="post_type_id" value="<?php echo esc_attr($post_type); ?>">
+            <input type="hidden" name="current_post_type_slug" value="<?php echo esc_attr($action === 'edit' ? ($post_type_data['post_type'] ?? $post_type) : ''); ?>">
             <?php wp_nonce_field('scs_save_post_type', 'scs_post_type_nonce'); ?>
 
             <div id="poststuff">
@@ -193,7 +249,7 @@ $success_message = isset($_GET['message']) ? sanitize_text_field($_GET['message'
                                             <label for="singular_name"><?php echo esc_html__('Nombre Singular', 'seo-content-structure'); ?></label>
                                         </th>
                                         <td>
-                                            <input type="text" id="singular_name" name="args[labels][singular_name]" value="<?php echo isset($post_type_data['args']['labels']['singular_name']) ? esc_attr($post_type_data['args']['labels']['singular_name']) : ''; ?>" class="regular-text" required>
+                                            <input type="text" id="singular_name" name="args[labels][singular_name]" value="<?php echo esc_attr($post_type_data['args']['labels']['singular_name']); ?>" class="regular-text" required>
                                             <p class="description"><?php echo esc_html__('Nombre en singular para el tipo de contenido (ej. Producto).', 'seo-content-structure'); ?></p>
                                         </td>
                                     </tr>
@@ -202,7 +258,7 @@ $success_message = isset($_GET['message']) ? sanitize_text_field($_GET['message'
                                             <label for="name"><?php echo esc_html__('Nombre Plural', 'seo-content-structure'); ?></label>
                                         </th>
                                         <td>
-                                            <input type="text" id="name" name="args[labels][name]" value="<?php echo isset($post_type_data['args']['labels']['name']) ? esc_attr($post_type_data['args']['labels']['name']) : ''; ?>" class="regular-text" required>
+                                            <input type="text" id="name" name="args[labels][name]" value="<?php echo esc_attr($post_type_data['args']['labels']['name']); ?>" class="regular-text" required>
                                             <p class="description"><?php echo esc_html__('Nombre en plural para el tipo de contenido (ej. Productos).', 'seo-content-structure'); ?></p>
                                         </td>
                                     </tr>
@@ -211,8 +267,8 @@ $success_message = isset($_GET['message']) ? sanitize_text_field($_GET['message'
                                             <label for="post_type"><?php echo esc_html__('Slug', 'seo-content-structure'); ?></label>
                                         </th>
                                         <td>
-                                            <input type="text" id="post_type" name="post_type" value="<?php echo esc_attr($post_type); ?>" class="regular-text" <?php echo $action === 'edit' ? 'readonly' : 'required'; ?>>
-                                            <p class="description"><?php echo esc_html__('Identificador único para el tipo de contenido. Solo letras minúsculas, números y guiones (ej. producto).', 'seo-content-structure'); ?></p>
+                                            <input type="text" id="post_type" name="post_type" value="<?php echo esc_attr($action === 'edit' ? ($post_type_data['post_type'] ?? $post_type) : ''); ?>" class="regular-text" <?php echo $action === 'edit' ? 'readonly' : 'required'; ?>>
+                                            <p class="description"><?php echo esc_html__('Identificador único para el tipo de contenido. Solo letras minúsculas, números y guiones (ej. producto). No se puede cambiar después de crear.', 'seo-content-structure'); ?></p>
                                         </td>
                                     </tr>
                                     <tr>
@@ -220,41 +276,58 @@ $success_message = isset($_GET['message']) ? sanitize_text_field($_GET['message'
                                             <label for="menu_icon"><?php echo esc_html__('Icono de Menú', 'seo-content-structure'); ?></label>
                                         </th>
                                         <td>
-                                            <input type="text" id="menu_icon" name="args[menu_icon]" value="<?php echo isset($post_type_data['args']['menu_icon']) ? esc_attr($post_type_data['args']['menu_icon']) : 'dashicons-admin-post'; ?>" class="regular-text">
+                                            <input type="text" id="menu_icon" name="args[menu_icon]" value="<?php echo esc_attr($post_type_data['args']['menu_icon']); ?>" class="regular-text">
                                             <p class="description"><?php echo esc_html__('Clase de dashicon (ej. dashicons-cart) o URL a una imagen.', 'seo-content-structure'); ?></p>
                                             <div class="scs-dashicons-list">
                                                 <button type="button" class="button" id="show-dashicons"><?php echo esc_html__('Mostrar Dashicons', 'seo-content-structure'); ?></button>
                                                 <div class="scs-dashicons-selector" style="display:none;">
-                                                    <!-- Los dashicons se cargarán vía JavaScript -->
                                                 </div>
                                             </div>
                                         </td>
                                     </tr>
                                     <tr>
                                         <th scope="row">
-                                            <label><?php echo esc_html__('Características', 'seo-content-structure'); ?></label>
+                                            <label><?php echo esc_html__('Visibilidad y Características', 'seo-content-structure'); ?></label>
                                         </th>
                                         <td>
-                                            <label>
-                                                <input type="checkbox" name="args[public]" value="1" <?php checked(isset($post_type_data['args']['public']) && $post_type_data['args']['public']); ?>>
-                                                <?php echo esc_html__('Público', 'seo-content-structure'); ?>
-                                            </label><br>
-                                            <label>
-                                                <input type="checkbox" name="args[has_archive]" value="1" <?php checked(isset($post_type_data['args']['has_archive']) && $post_type_data['args']['has_archive']); ?>>
-                                                <?php echo esc_html__('Página de Archivo', 'seo-content-structure'); ?>
-                                            </label><br>
-                                            <label>
-                                                <input type="checkbox" name="args[hierarchical]" value="1" <?php checked(isset($post_type_data['args']['hierarchical']) && $post_type_data['args']['hierarchical']); ?>>
-                                                <?php echo esc_html__('Jerárquico (como páginas)', 'seo-content-structure'); ?>
-                                            </label><br>
-                                            <label>
-                                                <input type="checkbox" name="args[show_in_rest]" value="1" <?php checked(!isset($post_type_data['args']['show_in_rest']) || $post_type_data['args']['show_in_rest']); ?>>
-                                                <?php echo esc_html__('Mostrar en REST API', 'seo-content-structure'); ?>
-                                            </label><br>
-                                            <label>
-                                                <input type="checkbox" name="args[active]" value="1" <?php checked(!isset($post_type_data['args']['active']) || $post_type_data['args']['active']); ?>>
-                                                <?php echo esc_html__('Activo', 'seo-content-structure'); ?>
-                                            </label>
+                                            <fieldset>
+                                                <legend class="screen-reader-text"><span><?php echo esc_html__('Visibilidad y Características', 'seo-content-structure'); ?></span></legend>
+                                                <label>
+                                                    <input type="checkbox" name="args[public]" value="1" <?php checked(filter_var($post_type_data['args']['public'], FILTER_VALIDATE_BOOLEAN)); ?>>
+                                                    <?php echo esc_html__('Público', 'seo-content-structure'); ?>
+                                                    <p class="description" style="margin-left: 20px;"><?php echo esc_html__('Controla si los posts son visibles públicamente en el frontend y en consultas.', 'seo-content-structure'); ?></p>
+                                                </label><br>
+                                                <label>
+                                                    <input type="checkbox" name="args[show_ui]" value="1" <?php checked(filter_var($post_type_data['args']['show_ui'], FILTER_VALIDATE_BOOLEAN)); ?>>
+                                                    <?php echo esc_html__('Mostrar UI', 'seo-content-structure'); ?>
+                                                    <p class="description" style="margin-left: 20px;"><?php echo esc_html__('Genera una interfaz de usuario en el admin para gestionar este CPT (generalmente igual que "Público").', 'seo-content-structure'); ?></p>
+                                                </label><br>
+                                                <label>
+                                                    <input type="checkbox" name="args[show_in_menu]" value="1" <?php checked(filter_var($post_type_data['args']['show_in_menu'], FILTER_VALIDATE_BOOLEAN)); ?>>
+                                                    <?php echo esc_html__('Mostrar en Menú', 'seo-content-structure'); ?>
+                                                    <p class="description" style="margin-left: 20px;"><?php echo esc_html__('Muestra el tipo de contenido en el menú lateral del administrador.', 'seo-content-structure'); ?></p>
+                                                </label><br>
+                                                <label>
+                                                    <input type="checkbox" name="args[has_archive]" value="1" <?php checked(filter_var($post_type_data['args']['has_archive'], FILTER_VALIDATE_BOOLEAN)); ?>>
+                                                    <?php echo esc_html__('Página de Archivo', 'seo-content-structure'); ?>
+                                                    <p class="description" style="margin-left: 20px;"><?php echo esc_html__('Permite una página de archivo para este CPT (ej. tusitio.com/terapias/).', 'seo-content-structure'); ?></p>
+                                                </label><br>
+                                                <label>
+                                                    <input type="checkbox" name="args[hierarchical]" value="1" <?php checked(filter_var($post_type_data['args']['hierarchical'], FILTER_VALIDATE_BOOLEAN)); ?>>
+                                                    <?php echo esc_html__('Jerárquico (como páginas)', 'seo-content-structure'); ?>
+                                                    <p class="description" style="margin-left: 20px;"><?php echo esc_html__('Permite relaciones padre/hijo entre las entradas.', 'seo-content-structure'); ?></p>
+                                                </label><br>
+                                                <label>
+                                                    <input type="checkbox" name="args[show_in_rest]" value="1" <?php checked(filter_var($post_type_data['args']['show_in_rest'], FILTER_VALIDATE_BOOLEAN)); ?>>
+                                                    <?php echo esc_html__('Mostrar en REST API', 'seo-content-structure'); ?>
+                                                    <p class="description" style="margin-left: 20px;"><?php echo esc_html__('Hace que el CPT y sus entradas sean accesibles a través de la API REST de WordPress.', 'seo-content-structure'); ?></p>
+                                                </label><br>
+                                                <label>
+                                                    <input type="checkbox" name="args[active]" value="1" <?php checked(filter_var($post_type_data['args']['active'], FILTER_VALIDATE_BOOLEAN)); ?>>
+                                                    <?php echo esc_html__('Activo', 'seo-content-structure'); ?>
+                                                    <p class="description" style="margin-left: 20px;"><?php echo esc_html__('Desmarcar para desactivar este CPT sin eliminarlo.', 'seo-content-structure'); ?></p>
+                                                </label>
+                                            </fieldset>
                                         </td>
                                     </tr>
                                 </table>
@@ -269,9 +342,10 @@ $success_message = isset($_GET['message']) ? sanitize_text_field($_GET['message'
                                 <p><?php echo esc_html__('Selecciona qué características nativas de WordPress estarán disponibles para este tipo de contenido.', 'seo-content-structure'); ?></p>
 
                                 <?php
-                                $supports = isset($post_type_data['args']['supports']) ? $post_type_data['args']['supports'] : array('title', 'editor', 'thumbnail');
-                                if (!is_array($supports)) {
-                                    $supports = array('title', 'editor', 'thumbnail');
+                                // ** Refactorizado: usar el valor de $post_type_data **
+                                $supports = $post_type_data['args']['supports'];
+                                if (!is_array($supports)) { // Asegurar que sea un array
+                                    $supports = $post_type_defaults['args']['supports'];
                                 }
 
                                 $available_supports = array(
@@ -283,8 +357,8 @@ $success_message = isset($_GET['message']) ? sanitize_text_field($_GET['message'
                                     'comments' => __('Comentarios', 'seo-content-structure'),
                                     'trackbacks' => __('Trackbacks', 'seo-content-structure'),
                                     'revisions' => __('Revisiones', 'seo-content-structure'),
-                                    'custom-fields' => __('Campos personalizados', 'seo-content-structure'),
-                                    'page-attributes' => __('Atributos de página', 'seo-content-structure'),
+                                    'custom-fields' => __('Campos personalizados (Metadatos nativos)', 'seo-content-structure'),
+                                    'page-attributes' => __('Atributos de página (orden y jerarquía)', 'seo-content-structure'),
                                     'post-formats' => __('Formatos de entrada', 'seo-content-structure')
                                 );
                                 ?>
@@ -310,7 +384,8 @@ $success_message = isset($_GET['message']) ? sanitize_text_field($_GET['message'
                                 <div class="scs-taxonomies-list">
                                     <h4><?php echo esc_html__('Taxonomías Existentes', 'seo-content-structure'); ?></h4>
                                     <?php
-                                    $current_taxonomies = array_keys($post_type_data['taxonomies'] ?? array());
+                                    // ** Refactorizado: usar el valor de $post_type_data **
+                                    $current_taxonomies = array_keys($post_type_data['taxonomies']);
                                     foreach ($taxonomies as $tax_name => $tax_label) :
                                     ?>
                                         <label>
@@ -327,62 +402,69 @@ $success_message = isset($_GET['message']) ? sanitize_text_field($_GET['message'
                                     <div id="scs-taxonomies-container">
                                         <?php
                                         // Mostrar taxonomías personalizadas existentes
-                                        $custom_taxonomies = array_filter($post_type_data['taxonomies'] ?? array(), function ($tax_name) use ($taxonomies) {
+                                        // ** Refactorizado: usar el valor de $post_type_data **
+                                        $custom_taxonomies = array_filter($post_type_data['taxonomies'], function ($tax_name) use ($taxonomies) {
                                             return !array_key_exists($tax_name, $taxonomies);
                                         }, ARRAY_FILTER_USE_KEY);
 
                                         $index = 0;
-                                        foreach ($custom_taxonomies as $tax_name => $tax_data) :
+                                        if (is_array($custom_taxonomies)) {
+                                            foreach ($custom_taxonomies as $tax_name => $tax_data) :
+                                                $tax_args = $tax_data['args'] ?? [];
+                                                $tax_labels = $tax_args['labels'] ?? [];
+                                                $singular = $tax_labels['singular_name'] ?? ($tax_data['singular'] ?? ''); // Compatibilidad
+                                                $plural = $tax_labels['name'] ?? ($tax_data['plural'] ?? ''); // Compatibilidad
+                                                $hierarchical = $tax_args['hierarchical'] ?? true;
                                         ?>
-                                            <div class="scs-taxonomy-item">
-                                                <h4><?php echo esc_html__('Nueva Taxonomía', 'seo-content-structure'); ?></h4>
-                                                <table class="form-table">
-                                                    <tr>
-                                                        <th scope="row">
-                                                            <label for="custom_tax_<?php echo $index; ?>_singular"><?php echo esc_html__('Nombre Singular', 'seo-content-structure'); ?></label>
-                                                        </th>
-                                                        <td>
-                                                            <input type="text" id="custom_tax_<?php echo $index; ?>_singular" name="custom_taxonomies[<?php echo $index; ?>][singular]" value="<?php echo isset($tax_data['singular']) ? esc_attr($tax_data['singular']) : ''; ?>" class="regular-text" required>
-                                                        </td>
-                                                    </tr>
-                                                    <tr>
-                                                        <th scope="row">
-                                                            <label for="custom_tax_<?php echo $index; ?>_plural"><?php echo esc_html__('Nombre Plural', 'seo-content-structure'); ?></label>
-                                                        </th>
-                                                        <td>
-                                                            <input type="text" id="custom_tax_<?php echo $index; ?>_plural" name="custom_taxonomies[<?php echo $index; ?>][plural]" value="<?php echo isset($tax_data['plural']) ? esc_attr($tax_data['plural']) : ''; ?>" class="regular-text" required>
-                                                        </td>
-                                                    </tr>
-                                                    <tr>
-                                                        <th scope="row">
-                                                            <label for="custom_tax_<?php echo $index; ?>_slug"><?php echo esc_html__('Slug', 'seo-content-structure'); ?></label>
-                                                        </th>
-                                                        <td>
-                                                            <input type="text" id="custom_tax_<?php echo $index; ?>_slug" name="custom_taxonomies[<?php echo $index; ?>][slug]" value="<?php echo esc_attr($tax_name); ?>" class="regular-text" required>
-                                                            <p class="description"><?php echo esc_html__('Identificador único para la taxonomía.', 'seo-content-structure'); ?></p>
-                                                        </td>
-                                                    </tr>
-                                                    <tr>
-                                                        <th scope="row">
-                                                            <label><?php echo esc_html__('Opciones', 'seo-content-structure'); ?></label>
-                                                        </th>
-                                                        <td>
-                                                            <label>
-                                                                <input type="checkbox" name="custom_taxonomies[<?php echo $index; ?>][hierarchical]" value="1" <?php checked(isset($tax_data['args']['hierarchical']) && $tax_data['args']['hierarchical']); ?>>
-                                                                <?php echo esc_html__('Jerárquica (como categorías)', 'seo-content-structure'); ?>
-                                                            </label>
-                                                        </td>
-                                                    </tr>
-                                                </table>
-                                                <button type="button" class="button remove-taxonomy"><?php echo esc_html__('Eliminar', 'seo-content-structure'); ?></button>
-                                            </div>
+                                                <div class="scs-taxonomy-item">
+                                                    <h4><?php echo esc_html__('Nueva Taxonomía', 'seo-content-structure'); ?></h4>
+                                                    <table class="form-table">
+                                                        <tr>
+                                                            <th scope="row">
+                                                                <label for="custom_tax_<?php echo $index; ?>_singular"><?php echo esc_html__('Nombre Singular', 'seo-content-structure'); ?></label>
+                                                            </th>
+                                                            <td>
+                                                                <input type="text" id="custom_tax_<?php echo $index; ?>_singular" name="custom_taxonomies[<?php echo $index; ?>][singular]" value="<?php echo esc_attr($singular); ?>" class="regular-text" required>
+                                                            </td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th scope="row">
+                                                                <label for="custom_tax_<?php echo $index; ?>_plural"><?php echo esc_html__('Nombre Plural', 'seo-content-structure'); ?></label>
+                                                            </th>
+                                                            <td>
+                                                                <input type="text" id="custom_tax_<?php echo $index; ?>_plural" name="custom_taxonomies[<?php echo $index; ?>][plural]" value="<?php echo esc_attr($plural); ?>" class="regular-text" required>
+                                                            </td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th scope="row">
+                                                                <label for="custom_tax_<?php echo $index; ?>_slug"><?php echo esc_html__('Slug', 'seo-content-structure'); ?></label>
+                                                            </th>
+                                                            <td>
+                                                                <input type="text" id="custom_tax_<?php echo $index; ?>_slug" name="custom_taxonomies[<?php echo $index; ?>][slug]" value="<?php echo esc_attr($tax_name); ?>" class="regular-text" required>
+                                                                <p class="description"><?php echo esc_html__('Identificador único para la taxonomía.', 'seo-content-structure'); ?></p>
+                                                            </td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th scope="row">
+                                                                <label><?php echo esc_html__('Opciones', 'seo-content-structure'); ?></label>
+                                                            </th>
+                                                            <td>
+                                                                <label>
+                                                                    <input type="checkbox" name="custom_taxonomies[<?php echo $index; ?>][hierarchical]" value="1" <?php checked(filter_var($hierarchical, FILTER_VALIDATE_BOOLEAN)); ?>>
+                                                                    <?php echo esc_html__('Jerárquica (como categorías)', 'seo-content-structure'); ?>
+                                                                </label>
+                                                            </td>
+                                                        </tr>
+                                                    </table>
+                                                    <button type="button" class="button remove-taxonomy"><?php echo esc_html__('Eliminar', 'seo-content-structure'); ?></button>
+                                                </div>
                                         <?php
-                                            $index++;
-                                        endforeach;
+                                                $index++;
+                                            endforeach;
+                                        } // end if is_array
                                         ?>
                                     </div>
 
-                                    <!-- Template para taxonomías personalizadas -->
                                     <script type="text/template" id="scs-taxonomy-template">
                                         <div class="scs-taxonomy-item">
                                             <h4><?php echo esc_html__('Nueva Taxonomía', 'seo-content-structure'); ?></h4>
@@ -446,7 +528,7 @@ $success_message = isset($_GET['message']) ? sanitize_text_field($_GET['message'
                                             <select id="schema_type" name="schema_type" class="regular-text">
                                                 <option value=""><?php echo esc_html__('Ninguno', 'seo-content-structure'); ?></option>
                                                 <?php foreach ($schema_types as $type => $label) : ?>
-                                                    <option value="<?php echo esc_attr($type); ?>" <?php selected($post_type_data['schema_type'] ?? '', $type); ?>>
+                                                    <option value="<?php echo esc_attr($type); ?>" <?php selected($post_type_data['schema_type'], $type); ?>>
                                                         <?php echo esc_html($type); ?>
                                                     </option>
                                                 <?php endforeach; ?>
@@ -498,8 +580,17 @@ $success_message = isset($_GET['message']) ? sanitize_text_field($_GET['message'
 
         <script type="text/javascript">
             (function($) {
-                // Contador para nuevas taxonomías
-                var taxonomyIndex = <?php echo $index; ?>;
+                // Asegurar que el objeto $post_type_data['taxonomies'] existe y es un array
+                <?php
+                $php_index = 0;
+                if (isset($post_type_data['taxonomies']) && is_array($post_type_data['taxonomies'])) {
+                    $custom_taxonomies_for_js = array_filter($post_type_data['taxonomies'], function ($tax_name) use ($taxonomies) {
+                        return !array_key_exists($tax_name, $taxonomies);
+                    }, ARRAY_FILTER_USE_KEY);
+                    $php_index = count($custom_taxonomies_for_js);
+                }
+                ?>
+                var taxonomyIndex = <?php echo $php_index; ?>; // Usar el índice calculado en PHP
 
                 // Añadir nueva taxonomía
                 $('#scs-add-taxonomy-button').on('click', function() {
@@ -514,22 +605,32 @@ $success_message = isset($_GET['message']) ? sanitize_text_field($_GET['message'
                     $(this).closest('.scs-taxonomy-item').remove();
                 });
 
-                // Generar slug automáticamente
+                // Generar slug automáticamente solo si está vacío y es acción 'new'
                 $('#singular_name').on('blur', function() {
-                    if ($('#post_type').val() === '' || $('#action').val() === 'new') {
-                        var slug = $(this).val().toLowerCase()
-                            .replace(/[^a-z0-9\s-]/g, '')
-                            .replace(/\s+/g, '-');
-                        $('#post_type').val(slug);
+                    var $slugInput = $('#post_type');
+                    var currentAction = '<?php echo esc_js($action); ?>'; // Obtener la acción PHP
+                    // Solo autogenerar si es nuevo Y el campo slug está vacío
+                    if (currentAction === 'new' && $slugInput.val() === '') {
+                        var singularName = $(this).val();
+                        if (singularName) {
+                            var slug = singularName.toLowerCase()
+                                .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Quitar acentos
+                                .replace(/[^a-z0-9\s-]/g, '') // Quitar caracteres no alfanuméricos excepto espacios y guiones
+                                .replace(/\s+/g, '-') // Reemplazar espacios con guiones
+                                .replace(/-+/g, '-'); // Reemplazar múltiples guiones con uno solo
+                            // Limitar longitud (opcional)
+                            slug = slug.substring(0, 20);
+                            $slugInput.val(slug);
+                        }
                     }
                 });
 
-                // Mostrar/ocultar selector de dashicons
-                $('#show-dashicons').on('click', function() {
+                // Función para cargar y mostrar dashicons
+                function loadAndShowDashicons() {
                     var $selector = $('.scs-dashicons-selector');
-
                     if ($selector.is(':empty')) {
-                        // Cargar dashicons solo la primera vez
+                        $selector.html('<p>Cargando iconos...</p>'); // Mensaje de carga
+                        // Lista de Dashicons (puedes expandirla si es necesario)
                         var dashicons = [
                             'dashicons-admin-appearance', 'dashicons-admin-collapse', 'dashicons-admin-comments',
                             'dashicons-admin-customizer', 'dashicons-admin-generic', 'dashicons-admin-home',
@@ -604,18 +705,20 @@ $success_message = isset($_GET['message']) ? sanitize_text_field($_GET['message'
                         ];
 
                         var html = '<div class="dashicons-grid">';
-                        for (var i = 0; i < dashicons.length; i++) {
-                            html += '<div class="dashicon-item" data-icon="' + dashicons[i] + '">';
-                            html += '<span class="dashicons ' + dashicons[i] + '"></span>';
+                        $.each(dashicons, function(i, iconClass) {
+                            html += '<div class="dashicon-item" data-icon="' + iconClass + '" title="' + iconClass + '">';
+                            html += '<span class="dashicons ' + iconClass + '"></span>';
                             html += '</div>';
-                        }
+                        });
                         html += '</div>';
 
-                        $selector.html(html);
+                        $selector.html(html); // Reemplazar mensaje de carga con la rejilla
                     }
+                    $selector.slideToggle(); // Mostrar/ocultar
+                }
 
-                    $selector.slideToggle();
-                });
+                // Mostrar/ocultar selector de dashicons
+                $('#show-dashicons').on('click', loadAndShowDashicons);
 
                 // Seleccionar un dashicon
                 $(document).on('click', '.dashicon-item', function() {

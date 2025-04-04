@@ -95,10 +95,6 @@ class Plugin
             try {
                 $admin_controller = new AdminController();
                 $admin_controller->register($this->loader);
-
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log("AdminController cargado y registrado con éxito");
-                }
             } catch (\Throwable $e) {
                 error_log("Error al inicializar el controlador de administración: " . $e->getMessage());
                 error_log("Traza: " . $e->getTraceAsString());
@@ -114,10 +110,6 @@ class Plugin
         try {
             $rest_controller = new RestController();
             $rest_controller->register($this->loader);
-
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log("RestController cargado y registrado con éxito");
-            }
         } catch (\Throwable $e) {
             error_log("Error al inicializar el controlador REST: " . $e->getMessage());
         }
@@ -157,10 +149,6 @@ class Plugin
             foreach ($post_types as $post_type) {
                 $post_type->register($this->loader);
             }
-
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log("Post types registrados con éxito");
-            }
         } catch (\Throwable $e) {
             error_log("Error al inicializar tipos de contenido: " . $e->getMessage());
         }
@@ -194,10 +182,6 @@ class Plugin
         try {
             $shortcodes = new Shortcodes();
             $shortcodes->register($this->loader);
-
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log("Shortcodes registrados con éxito");
-            }
         } catch (\Throwable $e) {
             error_log("Error al inicializar shortcodes: " . $e->getMessage());
         }
