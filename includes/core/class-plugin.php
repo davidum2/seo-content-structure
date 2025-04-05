@@ -63,27 +63,42 @@ class Plugin
      */
     public function init()
     {
-        // Inicializar internacionalización
-        $i18n = new I18n();
-        $this->loader->add_action('plugins_loaded', $i18n, 'load_plugin_textdomain');
+        try {
+            error_log('SCS_TRACE: === Plugin::init() START ===');
 
-        // Inicializar la administración del plugin
-        $this->init_admin();
+            // Inicializar internacionalización
+            $i18n = new I18n();
+            $this->loader->add_action('plugins_loaded', $i18n, 'load_plugin_textdomain');
 
-        // Inicializar API REST
-        $this->init_api();
+            // Inicializar la administración del plugin
+            $this->init_admin();
 
-        // Inicializar integraciones
-        $this->init_integrations();
+            // Inicializar API REST
+            $this->init_api();
 
-        // Inicializar tipos de contenido personalizados
-        $this->init_post_types();
+            // Inicializar integraciones
+            $this->init_integrations();
 
-        // Inicializar shortcodes
-        $this->init_shortcodes();
+            // Inicializar tipos de contenido personalizados
+            $this->init_post_types();
 
-        // Ejecutar el cargador
-        $this->loader->run();
+            // Inicializar shortcodes
+            $this->init_shortcodes();
+
+            // Verificar y reparar tablas si es necesario
+            $this->check_and_repair_post_types_table();
+
+            // Ejecutar el cargador
+            $this->loader->run();
+
+            error_log('SCS_TRACE: === Plugin::init() END ===');
+
+            return true;
+        } catch (\Throwable $e) {
+            error_log('SCS_FATAL: Error in Plugin::init(): ' . $e->getMessage());
+            error_log('SCS_FATAL: ' . $e->getTraceAsString());
+            return false;
+        }
     }
 
     /**
@@ -122,21 +137,26 @@ class Plugin
     {
         try {
             // Integración con Elementor (si está activo)
-            if (did_action('elementor/loaded')) {
-                $elementor_integration = new ElementorIntegration();
-                $elementor_integration->register($this->loader);
+            // Comenta estas líneas:
+            /*
+        if (did_action('elementor/loaded')) {
+            // Verificar si Elementor Pro está activo antes de usar sus clases
+            if (class_exists('\ElementorPro\Plugin')) {
+                 $elementor_integration = new \SEOContentStructure\Integrations\ElementorIntegration();
+                 $elementor_integration->register($this->loader);
+            } else {
+                 // Opcional: Registrar un aviso si Elementor Pro no está activo pero se intenta usar la integración
+                 // error_log('SCS Plugin: Elementor Pro no está activo, integración no cargada.');
             }
+        }
+        */
 
             // Integración con WooCommerce (si está activo)
-            // if (class_exists('WooCommerce')) {
-            //     $woocommerce_integration = new WooCommerceIntegration();
-            //     $woocommerce_integration->register($this->loader);
-            // }
+            // ... (código de WooCommerce si existe) ...
         } catch (\Throwable $e) {
             error_log("Error al inicializar integraciones: " . $e->getMessage());
         }
     }
-
     /**
      * Inicializa los tipos de contenido personalizados
      */
@@ -195,5 +215,32 @@ class Plugin
     public function get_loader()
     {
         return $this->loader;
+    }
+
+    /**
+     * Verifica y repara la tabla de post types si es necesario
+     */
+    public function check_and_repair_post_types_table()
+    {
+        error_log("SCS_TRACE: Plugin - Verificando tabla de post types");
+
+        // Intentar crear/verificar tabla de post types
+        try {
+            if (class_exists('\SEOContentStructure\PostTypes\PostTypeFactory')) {
+                $factory = new \SEOContentStructure\PostTypes\PostTypeFactory();
+
+                // Si factory tiene el método para crear tablas, llamarlo
+                if (method_exists($factory, 'create_post_types_table')) {
+                    error_log("SCS_TRACE: Plugin - Llamando a create_post_types_table desde verificador");
+                    $factory->create_post_types_table();
+                } else {
+                    error_log("SCS_ERROR: Plugin - Método create_post_types_table no encontrado en factory");
+                }
+            } else {
+                error_log("SCS_ERROR: Plugin - Clase PostTypeFactory no encontrada");
+            }
+        } catch (\Throwable $e) {
+            error_log("SCS_ERROR: Plugin - Error al verificar/reparar tabla: " . $e->getMessage());
+        }
     }
 }

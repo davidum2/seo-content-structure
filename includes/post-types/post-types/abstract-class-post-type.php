@@ -76,6 +76,8 @@ abstract class PostType implements Registrable
      */
     public function __construct($post_type, $args = array(), $taxonomies = array())
     {
+        error_log("SCS_TRACE: PostType Constructor - Iniciando para post_type: $post_type");
+
         $this->post_type = $post_type;
         $this->args = $args;
         $this->taxonomies = $taxonomies;
@@ -83,11 +85,16 @@ abstract class PostType implements Registrable
         // Establecer estado activo desde args si existe
         if (isset($args['active'])) {
             $this->is_active = (bool) $args['active'];
+            error_log("SCS_TRACE: PostType Constructor - Estado activo definido externamente: " . ($this->is_active ? 'true' : 'false'));
+        } else {
+            error_log("SCS_TRACE: PostType Constructor - Usando estado activo predeterminado: true");
         }
 
         // Configuración predeterminada
         $this->set_default_args();
         $this->set_labels();
+
+        error_log("SCS_TRACE: PostType Constructor - Finalizado para post_type: $post_type");
     }
 
     /**
@@ -95,6 +102,8 @@ abstract class PostType implements Registrable
      */
     protected function set_default_args()
     {
+        error_log("SCS_TRACE: PostType::set_default_args - Iniciando para {$this->post_type}");
+
         $defaults = array(
             'public'              => true,
             'show_ui'             => true,
@@ -115,12 +124,17 @@ abstract class PostType implements Registrable
             'active'              => $this->is_active, // Incluir estado activo en args
         );
 
+        error_log("SCS_TRACE: PostType::set_default_args - Args antes de fusionar: " . print_r($this->args, true));
         $this->args = wp_parse_args($this->args, $defaults);
+        error_log("SCS_TRACE: PostType::set_default_args - Args después de fusionar: " . print_r($this->args, true));
 
         // Asegurar que el rewrite tenga slug
         if (is_array($this->args['rewrite']) && !isset($this->args['rewrite']['slug'])) {
             $this->args['rewrite']['slug'] = $this->post_type;
+            error_log("SCS_TRACE: PostType::set_default_args - Añadido slug de rewrite: {$this->post_type}");
         }
+
+        error_log("SCS_TRACE: PostType::set_default_args - Finalizado para {$this->post_type}");
     }
 
     /**
@@ -128,52 +142,71 @@ abstract class PostType implements Registrable
      */
     protected function set_labels()
     {
-        $singular = ucfirst(str_replace('_', ' ', $this->post_type));
-        $plural = $singular . 's';
+        error_log("SCS_TRACE: PostType::set_labels - Iniciando para {$this->post_type}");
 
-        if (isset($this->args['singular'])) {
-            $singular = $this->args['singular'];
-            unset($this->args['singular']);
+        // Si ya hay etiquetas, simplemente usar esas
+        if (
+            isset($this->args['labels']) && is_array($this->args['labels']) &&
+            isset($this->args['labels']['name']) && isset($this->args['labels']['singular_name'])
+        ) {
+
+            error_log("SCS_TRACE: PostType::set_labels - Usando etiquetas existentes: " .
+                $this->args['labels']['singular_name'] . "/" . $this->args['labels']['name']);
+
+            $this->labels = $this->args['labels'];
+            return;
         }
 
-        if (isset($this->args['plural'])) {
-            $plural = $this->args['plural'];
-            unset($this->args['plural']);
+        // Si no hay etiquetas existentes pero hay nombre y singular, crearlas
+        if (isset($this->args['singular_name']) && isset($this->args['name'])) {
+            $singular = $this->args['singular_name'];
+            $plural = $this->args['name'];
+
+            error_log("SCS_TRACE: PostType::set_labels - Creando etiquetas desde args: $singular/$plural");
+        } else {
+            // Valores por defecto
+            $singular = ucfirst($this->post_type);
+            $plural = $singular . 's';
+
+            error_log("SCS_TRACE: PostType::set_labels - Usando etiquetas predeterminadas: $singular/$plural");
         }
 
-        $default_labels = array(
+        $this->labels = array(
             'name'                  => $plural,
             'singular_name'         => $singular,
-            'menu_name'             => $plural,
-            'name_admin_bar'        => $singular,
-            'archives'              => sprintf(__('Archivo de %s', 'seo-content-structure'), $plural),
-            'attributes'            => sprintf(__('Atributos de %s', 'seo-content-structure'), $singular),
-            'parent_item_colon'     => sprintf(__('%s Superior:', 'seo-content-structure'), $singular),
-            'all_items'             => sprintf(__('Todos los %s', 'seo-content-structure'), $plural),
-            'add_new_item'          => sprintf(__('Añadir Nuevo %s', 'seo-content-structure'), $singular),
-            'add_new'               => __('Añadir Nuevo', 'seo-content-structure'),
-            'new_item'              => sprintf(__('Nuevo %s', 'seo-content-structure'), $singular),
-            'edit_item'             => sprintf(__('Editar %s', 'seo-content-structure'), $singular),
-            'update_item'           => sprintf(__('Actualizar %s', 'seo-content-structure'), $singular),
-            'view_item'             => sprintf(__('Ver %s', 'seo-content-structure'), $singular),
-            'view_items'            => sprintf(__('Ver %s', 'seo-content-structure'), $plural),
-            'search_items'          => sprintf(__('Buscar %s', 'seo-content-structure'), $singular),
-            'not_found'             => __('No encontrado', 'seo-content-structure'),
-            'not_found_in_trash'    => __('No encontrado en la papelera', 'seo-content-structure'),
-            'featured_image'        => __('Imagen Destacada', 'seo-content-structure'),
-            'set_featured_image'    => __('Establecer imagen destacada', 'seo-content-structure'),
-            'remove_featured_image' => __('Eliminar imagen destacada', 'seo-content-structure'),
-            'use_featured_image'    => __('Usar como imagen destacada', 'seo-content-structure'),
-            'insert_into_item'      => sprintf(__('Insertar en %s', 'seo-content-structure'), $singular),
-            'uploaded_to_this_item' => sprintf(__('Subido a este %s', 'seo-content-structure'), $singular),
-            'items_list'            => sprintf(__('Lista de %s', 'seo-content-structure'), $plural),
-            'items_list_navigation' => sprintf(__('Navegación de lista de %s', 'seo-content-structure'), $plural),
-            'filter_items_list'     => sprintf(__('Filtrar lista de %s', 'seo-content-structure'), $plural),
+            'add_new'               => sprintf('Añadir %s', $singular),
+            'add_new_item'          => sprintf('Añadir nuevo %s', $singular),
+            'edit_item'             => sprintf('Editar %s', $singular),
+            'new_item'              => sprintf('Nuevo %s', $singular),
+            'view_item'             => sprintf('Ver %s', $singular),
+            'view_items'            => sprintf('Ver %s', $plural),
+            'search_items'          => sprintf('Buscar %s', $plural),
+            'not_found'             => sprintf('No se encontraron %s', $plural),
+            'not_found_in_trash'    => sprintf('No se encontraron %s en la papelera', $plural),
+            'parent_item_colon'     => sprintf('Pariente %s:', $singular),
+            'all_items'             => sprintf('Todos los %s', $plural),
+            'archives'              => sprintf('Archivos de %s', $plural),
+            'attributes'            => sprintf('Atributos de %s', $singular),
+            'insert_into_item'      => sprintf('Insertar en %s', $singular),
+            'uploaded_to_this_item' => sprintf('Subido a este %s', $singular),
+            'featured_image'        => 'Imagen destacada',
+            'set_featured_image'    => 'Establecer imagen destacada',
+            'remove_featured_image' => 'Eliminar imagen destacada',
+            'use_featured_image'    => 'Usar como imagen destacada',
+            'filter_items_list'     => sprintf('Filtrar lista de %s', $plural),
+            'items_list_navigation' => sprintf('Navegación de la lista de %s', $plural),
+            'items_list'            => sprintf('Lista de %s', $plural),
+            'item_published'        => sprintf('%s publicado', $singular),
+            'item_published_privately' => sprintf('%s publicado de forma privada', $singular),
+            'item_reverted_to_draft' => sprintf('%s revertido a borrador', $singular),
+            'item_scheduled'        => sprintf('%s programado', $singular),
+            'item_updated'          => sprintf('%s actualizado', $singular),
         );
 
-        $this->labels = isset($this->args['labels']) ? wp_parse_args($this->args['labels'], $default_labels) : $default_labels;
-
+        // Guardar las etiquetas en args también
         $this->args['labels'] = $this->labels;
+
+        error_log("SCS_TRACE: PostType::set_labels - Etiquetas configuradas para {$this->post_type}");
     }
 
     /**

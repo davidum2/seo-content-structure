@@ -27,6 +27,13 @@ class AdminController implements Registrable
     protected $admin_notices = [];
 
     /**
+     * Hook de la página de tipos de contenido
+     *
+     * @var string
+     */
+    protected $post_types_page_hook;
+
+    /**
      * Constructor
      */
     public function __construct()
@@ -41,7 +48,6 @@ class AdminController implements Registrable
      */
     public function register(Loader $loader)
     {
-
         // Hooks principales de administración
         $this->register_admin_hooks($loader);
 
@@ -113,9 +119,9 @@ class AdminController implements Registrable
     public function add_admin_menu()
     {
         // Menú principal
-        add_menu_page(
-            __('SEO Content Structure', 'seo-content-structure'),
-            __('SEO Content', 'seo-content-structure'),
+        \add_menu_page(
+            \__('SEO Content Structure', 'seo-content-structure'),
+            \__('SEO Content', 'seo-content-structure'),
             'manage_options',
             'seo-content-structure',
             [$this, 'render_main_page'],
@@ -133,50 +139,50 @@ class AdminController implements Registrable
     protected function add_submenus()
     {
         // Dashboard
-        add_submenu_page(
+        \add_submenu_page(
             'seo-content-structure',
-            __('Dashboard', 'seo-content-structure'),
-            __('Dashboard', 'seo-content-structure'),
+            \__('Dashboard', 'seo-content-structure'),
+            \__('Dashboard', 'seo-content-structure'),
             'manage_options',
             'seo-content-structure',
             [$this, 'render_main_page']
         );
 
         // Grupos de Campos
-        add_submenu_page(
+        \add_submenu_page(
             'seo-content-structure',
-            __('Grupos de Campos', 'seo-content-structure'),
-            __('Grupos de Campos', 'seo-content-structure'),
+            \__('Grupos de Campos', 'seo-content-structure'),
+            \__('Grupos de Campos', 'seo-content-structure'),
             'manage_options',
             'scs-field-groups',
             [$this, 'render_field_groups_page']
         );
 
         // Tipos de Contenido
-        add_submenu_page(
+        $this->post_types_page_hook = \add_submenu_page(
             'seo-content-structure',
-            __('Tipos de Contenido', 'seo-content-structure'),
-            __('Tipos de Contenido', 'seo-content-structure'),
+            \__('Tipos de Contenido', 'seo-content-structure'),
+            \__('Tipos de Contenido', 'seo-content-structure'),
             'manage_options',
             'scs-post-types',
             [$this, 'render_post_types_page']
         );
 
         // Editor de Schema
-        add_submenu_page(
+        \add_submenu_page(
             'seo-content-structure',
-            __('Editor de Schema', 'seo-content-structure'),
-            __('Editor de Schema', 'seo-content-structure'),
+            \__('Editor de Schema', 'seo-content-structure'),
+            \__('Editor de Schema', 'seo-content-structure'),
             'manage_options',
             'scs-schema-editor',
             [$this, 'render_schema_editor_page']
         );
 
         // Configuración
-        add_submenu_page(
+        \add_submenu_page(
             'seo-content-structure',
-            __('Configuración', 'seo-content-structure'),
-            __('Configuración', 'seo-content-structure'),
+            \__('Configuración', 'seo-content-structure'),
+            \__('Configuración', 'seo-content-structure'),
             'manage_options',
             'scs-settings',
             [$this, 'render_settings_page']
@@ -244,11 +250,11 @@ class AdminController implements Registrable
     protected function get_localized_strings()
     {
         return [
-            'confirm_delete' => __('¿Estás seguro de que deseas eliminar este elemento? Esta acción no se puede deshacer.', 'seo-content-structure'),
-            'saving'         => __('Guardando...', 'seo-content-structure'),
-            'saved'          => __('Guardado correctamente', 'seo-content-structure'),
-            'error'          => __('Ha ocurrido un error', 'seo-content-structure'),
-            'confirm_delete_field' => __('¿Estás seguro de que deseas eliminar este campo?', 'seo-content-structure'),
+            'confirm_delete' => \__('¿Estás seguro de que deseas eliminar este elemento? Esta acción no se puede deshacer.', 'seo-content-structure'),
+            'saving'         => \__('Guardando...', 'seo-content-structure'),
+            'saved'          => \__('Guardado correctamente', 'seo-content-structure'),
+            'error'          => \__('Ha ocurrido un error', 'seo-content-structure'),
+            'confirm_delete_field' => \__('¿Estás seguro de que deseas eliminar este campo?', 'seo-content-structure'),
         ];
     }
 
@@ -310,17 +316,24 @@ class AdminController implements Registrable
     }
 
     /**
-     * Carga recursos para la página de tipos de contenido
+     * Carga scripts específicos para la página de tipos de contenido
      */
-    protected function enqueue_post_types_assets()
+    public function enqueue_post_types_assets()
     {
-        wp_enqueue_script(
-            'scs-post-type',
-            SCS_PLUGIN_URL . 'assets/js/post-type.js',
-            ['scs-admin-scripts', 'jquery'],
-            SCS_VERSION,
-            true
-        );
+        // Scripts para la página de tipos de contenido
+        wp_enqueue_style('scs-post-types-css', SCS_PLUGIN_URL . 'assets/css/post-types.css', array(), SCS_VERSION);
+        wp_enqueue_script('scs-post-types-js', SCS_PLUGIN_URL . 'assets/js/post-types.js', array('jquery', 'jquery-ui-sortable'), SCS_VERSION, true);
+
+        // Localizar script
+        wp_localize_script('scs-post-types-js', 'scsPostTypes', array(
+            'ajaxurl' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('scs_post_types_nonce'),
+            'strings' => array(
+                'confirmDelete' => \__('¿Estás seguro de que deseas eliminar este elemento?', 'seo-content-structure'),
+                'slugExists' => \__('Este slug ya está en uso. Por favor, elige otro.', 'seo-content-structure'),
+                'slugInvalid' => \__('El slug solo puede contener letras minúsculas, números y guiones.', 'seo-content-structure'),
+            )
+        ));
     }
 
     /**
@@ -332,8 +345,8 @@ class AdminController implements Registrable
     public function add_action_links($links)
     {
         $custom_links = [
-            '<a href="' . admin_url('admin.php?page=seo-content-structure') . '">' . __('Dashboard', 'seo-content-structure') . '</a>',
-            '<a href="' . admin_url('admin.php?page=scs-settings') . '">' . __('Configuración', 'seo-content-structure') . '</a>',
+            '<a href="' . admin_url('admin.php?page=seo-content-structure') . '">' . \__('Dashboard', 'seo-content-structure') . '</a>',
+            '<a href="' . admin_url('admin.php?page=scs-settings') . '">' . \__('Configuración', 'seo-content-structure') . '</a>',
         ];
 
         return array_merge($custom_links, $links);
@@ -385,7 +398,7 @@ class AdminController implements Registrable
         if (version_compare(PHP_VERSION, '7.0', '<')) {
             echo '<div class="notice notice-error">';
             echo '<p>' . sprintf(
-                __('%s requiere PHP 7.0 o superior. Tu servidor está ejecutando PHP %s.', 'seo-content-structure'),
+                \__('%s requiere PHP 7.0 o superior. Tu servidor está ejecutando PHP %s.', 'seo-content-structure'),
                 '<strong>SEO Content Structure</strong>',
                 PHP_VERSION
             ) . '</p>';
@@ -397,7 +410,7 @@ class AdminController implements Registrable
         if (version_compare($wp_version, '5.0', '<')) {
             echo '<div class="notice notice-error">';
             echo '<p>' . sprintf(
-                __('%s requiere WordPress 5.0 o superior. Tu sitio está ejecutando WordPress %s.', 'seo-content-structure'),
+                \__('%s requiere WordPress 5.0 o superior. Tu sitio está ejecutando WordPress %s.', 'seo-content-structure'),
                 '<strong>SEO Content Structure</strong>',
                 $wp_version
             ) . '</p>';
@@ -420,8 +433,8 @@ class AdminController implements Registrable
         // Pestaña general de ayuda
         $screen->add_help_tab([
             'id'      => 'scs_help_overview',
-            'title'   => __('Descripción General', 'seo-content-structure'),
-            'content' => '<p>' . __('SEO Content Structure te permite crear tipos de contenido personalizados con campos avanzados y estructuras JSON-LD para mejorar el SEO de tu sitio.', 'seo-content-structure') . '</p>',
+            'title'   => \__('Descripción General', 'seo-content-structure'),
+            'content' => '<p>' . \__('SEO Content Structure te permite crear tipos de contenido personalizados con campos avanzados y estructuras JSON-LD para mejorar el SEO de tu sitio.', 'seo-content-structure') . '</p>',
         ]);
 
         // Pestañas específicas según la página
@@ -441,20 +454,20 @@ class AdminController implements Registrable
         if (strpos($screen->id, 'scs-field-groups') !== false) {
             $screen->add_help_tab([
                 'id'      => 'scs_help_field_groups',
-                'title'   => __('Grupos de Campos', 'seo-content-structure'),
-                'content' => '<p>' . __('Crea y administra grupos de campos personalizados para tus tipos de contenido.', 'seo-content-structure') . '</p>',
+                'title'   => \__('Grupos de Campos', 'seo-content-structure'),
+                'content' => '<p>' . \__('Crea y administra grupos de campos personalizados para tus tipos de contenido.', 'seo-content-structure') . '</p>',
             ]);
         } elseif (strpos($screen->id, 'scs-post-types') !== false) {
             $screen->add_help_tab([
                 'id'      => 'scs_help_post_types',
-                'title'   => __('Tipos de Contenido', 'seo-content-structure'),
-                'content' => '<p>' . __('Crea y administra tipos de contenido personalizados para tu sitio.', 'seo-content-structure') . '</p>',
+                'title'   => \__('Tipos de Contenido', 'seo-content-structure'),
+                'content' => '<p>' . \__('Crea y administra tipos de contenido personalizados para tu sitio.', 'seo-content-structure') . '</p>',
             ]);
         } elseif (strpos($screen->id, 'scs-schema-editor') !== false) {
             $screen->add_help_tab([
                 'id'      => 'scs_help_schema',
-                'title'   => __('Editor de Schema', 'seo-content-structure'),
-                'content' => '<p>' . __('Crea y edita estructuras JSON-LD para mejorar el SEO de tu sitio.', 'seo-content-structure') . '</p>',
+                'title'   => \__('Editor de Schema', 'seo-content-structure'),
+                'content' => '<p>' . \__('Crea y edita estructuras JSON-LD para mejorar el SEO de tu sitio.', 'seo-content-structure') . '</p>',
             ]);
         }
     }
@@ -467,9 +480,9 @@ class AdminController implements Registrable
     protected function add_help_sidebar($screen)
     {
         $screen->set_help_sidebar(
-            '<p><strong>' . __('Para más información:', 'seo-content-structure') . '</strong></p>' .
-                '<p><a href="https://ejemplo.com/docs" target="_blank">' . __('Documentación', 'seo-content-structure') . '</a></p>' .
-                '<p><a href="https://ejemplo.com/support" target="_blank">' . __('Soporte', 'seo-content-structure') . '</a></p>'
+            '<p><strong>' . \__('Para más información:', 'seo-content-structure') . '</strong></p>' .
+                '<p><a href="https://ejemplo.com/docs" target="_blank">' . \__('Documentación', 'seo-content-structure') . '</a></p>' .
+                '<p><a href="https://ejemplo.com/support" target="_blank">' . \__('Soporte', 'seo-content-structure') . '</a></p>'
         );
     }
 
@@ -480,12 +493,12 @@ class AdminController implements Registrable
     {
         // Verificar nonce para seguridad
         if (!isset($_POST['scs_post_type_nonce']) || !wp_verify_nonce($_POST['scs_post_type_nonce'], 'scs_register_post_type')) {
-            wp_die(__('¡Vaya, algo salió mal! Por favor, recarga la página e inténtalo de nuevo.', 'seo-content-structure'));
+            wp_die(\__('¡Vaya, algo salió mal! Por favor, recarga la página e inténtalo de nuevo.', 'seo-content-structure'));
         }
 
         // Verificar permisos
         if (!current_user_can('manage_options')) {
-            wp_die(__('No tienes permisos para realizar esta acción.', 'seo-content-structure'));
+            wp_die(\__('No tienes permisos para realizar esta acción.', 'seo-content-structure'));
         }
 
         // Recoger y validar datos
@@ -505,11 +518,11 @@ class AdminController implements Registrable
 
         if (is_wp_error($result)) {
             // Manejar el error de registro
-            $this->add_admin_notice('error', __('Error al registrar el tipo de contenido: ', 'seo-content-structure') . $result->get_error_message());
+            $this->add_admin_notice('error', \__('Error al registrar el tipo de contenido: ', 'seo-content-structure') . $result->get_error_message());
         } else {
             // Éxito: guardar en la base de datos para persistencia
             $this->save_post_type_to_db($post_type_data['nombre'], $args);
-            $this->add_admin_notice('success', __('Tipo de contenido registrado correctamente.', 'seo-content-structure'));
+            $this->add_admin_notice('success', \__('Tipo de contenido registrado correctamente.', 'seo-content-structure'));
 
             // Limpiar caché de tipos de contenido
             delete_transient('scs_post_types_cache');
@@ -583,25 +596,25 @@ class AdminController implements Registrable
     {
         // Validar nombre del post type
         if (empty($data['nombre'])) {
-            $this->add_admin_notice('error', __('El nombre del tipo de contenido es obligatorio.', 'seo-content-structure'));
+            $this->add_admin_notice('error', \__('El nombre del tipo de contenido es obligatorio.', 'seo-content-structure'));
             return false;
         }
 
         // Validar formato del nombre
         if (!preg_match('/^[a-z0-9_\-]+$/', $data['nombre'])) {
-            $this->add_admin_notice('error', __('El nombre del tipo de contenido solo puede contener letras minúsculas, números, guiones y guiones bajos.', 'seo-content-structure'));
+            $this->add_admin_notice('error', \__('El nombre del tipo de contenido solo puede contener letras minúsculas, números, guiones y guiones bajos.', 'seo-content-structure'));
             return false;
         }
 
         // Validar que ya no exista
         if (post_type_exists($data['nombre'])) {
-            $this->add_admin_notice('error', __('Ya existe un tipo de contenido con ese nombre.', 'seo-content-structure'));
+            $this->add_admin_notice('error', \__('Ya existe un tipo de contenido con ese nombre.', 'seo-content-structure'));
             return false;
         }
 
         // Validar nombres singular y plural
         if (empty($data['singular']) || empty($data['plural'])) {
-            $this->add_admin_notice('error', __('Los nombres singular y plural son obligatorios.', 'seo-content-structure'));
+            $this->add_admin_notice('error', \__('Los nombres singular y plural son obligatorios.', 'seo-content-structure'));
             return false;
         }
 
@@ -622,15 +635,15 @@ class AdminController implements Registrable
                 'singular_name' => $data['singular'],
                 'menu_name' => $data['plural'],
                 'admin_bar_menu_name' => $data['singular'],
-                'add_new' => __('Añadir Nuevo', 'seo-content-structure') . ' ' . $data['singular'],
-                'add_new_item' => __('Añadir Nuevo', 'seo-content-structure') . ' ' . $data['singular'],
-                'edit_item' => __('Editar', 'seo-content-structure') . ' ' . $data['singular'],
-                'new_item' => __('Nuevo', 'seo-content-structure') . ' ' . $data['singular'],
-                'view_item' => __('Ver', 'seo-content-structure') . ' ' . $data['singular'],
-                'search_items' => __('Buscar', 'seo-content-structure') . ' ' . $data['plural'],
-                'not_found' => __('No se encontraron', 'seo-content-structure') . ' ' . $data['plural'],
-                'not_found_in_trash' => __('No se encontraron', 'seo-content-structure') . ' ' . $data['plural'] . ' en la papelera',
-                'all_items' => __('Todos los', 'seo-content-structure') . ' ' . $data['plural'],
+                'add_new' => \__('Añadir Nuevo', 'seo-content-structure') . ' ' . $data['singular'],
+                'add_new_item' => \__('Añadir Nuevo', 'seo-content-structure') . ' ' . $data['singular'],
+                'edit_item' => \__('Editar', 'seo-content-structure') . ' ' . $data['singular'],
+                'new_item' => \__('Nuevo', 'seo-content-structure') . ' ' . $data['singular'],
+                'view_item' => \__('Ver', 'seo-content-structure') . ' ' . $data['singular'],
+                'search_items' => \__('Buscar', 'seo-content-structure') . ' ' . $data['plural'],
+                'not_found' => \__('No se encontraron', 'seo-content-structure') . ' ' . $data['plural'],
+                'not_found_in_trash' => \__('No se encontraron', 'seo-content-structure') . ' ' . $data['plural'] . ' en la papelera',
+                'all_items' => \__('Todos los', 'seo-content-structure') . ' ' . $data['plural'],
             ],
             'description' => $data['descripcion'],
             'public' => $data['public'],
@@ -720,33 +733,33 @@ class AdminController implements Registrable
 
         // Verificar permisos
         if (!current_user_can('manage_options')) {
-            wp_send_json_error(__('No tienes permisos para realizar esta acción.', 'seo-content-structure'));
+            wp_send_json_error(\__('No tienes permisos para realizar esta acción.', 'seo-content-structure'));
         }
 
         $slug = isset($_POST['slug']) ? sanitize_key($_POST['slug']) : '';
 
         // Validar formato
         if (!preg_match('/^[a-z0-9_\-]+$/', $slug)) {
-            wp_send_json_error(__('El slug solo puede contener letras minúsculas, números, guiones y guiones bajos.', 'seo-content-structure'));
+            wp_send_json_error(\__('El slug solo puede contener letras minúsculas, números, guiones y guiones bajos.', 'seo-content-structure'));
         }
 
         // Verificar longitud
         if (strlen($slug) < 3 || strlen($slug) > 20) {
-            wp_send_json_error(__('El slug debe tener entre 3 y 20 caracteres.', 'seo-content-structure'));
+            wp_send_json_error(\__('El slug debe tener entre 3 y 20 caracteres.', 'seo-content-structure'));
         }
 
         // Verificar si ya existe
         if (post_type_exists($slug)) {
-            wp_send_json_error(__('Este tipo de contenido ya existe.', 'seo-content-structure'));
+            wp_send_json_error(\__('Este tipo de contenido ya existe.', 'seo-content-structure'));
         }
 
         // Verificar reservados
         $reserved = ['post', 'page', 'attachment', 'revision', 'nav_menu_item', 'custom_css', 'customize_changeset'];
         if (in_array($slug, $reserved)) {
-            wp_send_json_error(__('Este es un tipo de contenido reservado de WordPress.', 'seo-content-structure'));
+            wp_send_json_error(\__('Este es un tipo de contenido reservado de WordPress.', 'seo-content-structure'));
         }
 
-        wp_send_json_success(__('El slug es válido.', 'seo-content-structure'));
+        wp_send_json_success(\__('El slug es válido.', 'seo-content-structure'));
     }
 
     /**
@@ -770,103 +783,88 @@ class AdminController implements Registrable
      */
     public function render_post_types_page()
     {
-        // Check if we're in edit mode
-        $action = isset($_GET['action']) ? sanitize_text_field($_GET['action']) : 'list';
-        $post_type = isset($_GET['post_type']) ? sanitize_key($_GET['post_type']) : '';
-
-        // Make sure we have access to the factory
-        if (!isset($this->post_type_factory) || !($this->post_type_factory instanceof \SEOContentStructure\PostTypes\PostTypeFactory)) {
-            $this->post_type_factory = new \SEOContentStructure\PostTypes\PostTypeFactory();
-        }
+        error_log('SCS_TRACE: === AdminController::render_post_types_page() INICIO ===');
+        error_log('SCS_TRACE: $_GET = ' . print_r($_GET, true));
 
         try {
-            // Load the appropriate view
-            include_once SCS_PLUGIN_DIR . 'includes/admin/views/post-type-builder.php';
-        } catch (\Exception $e) {
+            // Verificar si tenemos la factory
+            if (!$this->post_type_factory) {
+                error_log('SCS_TRACE: Creando instancia de PostTypeFactory en render_post_types_page');
+                $this->post_type_factory = new \SEOContentStructure\PostTypes\PostTypeFactory();
+            } else {
+                error_log('SCS_TRACE: Factory ya existe en render_post_types_page');
+            }
+
+            $action = isset($_GET['action']) ? \sanitize_text_field($_GET['action']) : 'list';
+            $post_type = isset($_GET['post_type']) ? \sanitize_key($_GET['post_type']) : '';
+
+            error_log("SCS_TRACE: Renderizando página para action=$action, post_type=$post_type");
+
+            // Si estamos editando, verificar que el post type esté disponible
+            if ($action === 'edit' && !empty($post_type)) {
+                $post_type_obj = $this->post_type_factory->get_post_type($post_type);
+                if (!$post_type_obj) {
+                    error_log("SCS_ERROR: Post type no encontrado en render_post_types_page: $post_type");
+
+                    // Intentar cargar desde BD directamente
+                    global $wpdb;
+                    $table = $wpdb->prefix . 'scs_post_types';
+                    $query = $wpdb->prepare("SELECT * FROM $table WHERE post_type = %s", $post_type);
+                    $post_type_data = $wpdb->get_row($query, ARRAY_A);
+
+                    error_log("SCS_TRACE: Datos desde BD en render: " . ($post_type_data ? 'ENCONTRADO' : 'NO ENCONTRADO'));
+
+                    if (!$post_type_data) {
+                        echo '<div class="notice notice-error"><p>';
+                        echo 'El tipo de contenido solicitado no existe o no se pudo cargar.';
+                        echo '</p></div>';
+
+                        // Cargar vista de lista como fallback
+                        error_log("SCS_TRACE: Cambiando a vista de listado como fallback");
+                        include_once SCS_PLUGIN_DIR . 'includes/admin/views/post-types-list.php';
+                        return;
+                    }
+                } else {
+                    error_log("SCS_TRACE: Post type encontrado en render: " . $post_type_obj->get_post_type());
+                }
+            }
+
+            // Cargar la vista según la acción
+            if ($action === 'edit' || $action === 'new') {
+                // Vista de edición/creación
+                error_log("SCS_TRACE: Comprobando si el archivo post-type-builder.php existe");
+                $builder_file = SCS_PLUGIN_DIR . 'includes/admin/views/post-type-builder.php';
+                if (file_exists($builder_file)) {
+                    error_log("SCS_TRACE: El archivo post-type-builder.php EXISTE");
+                } else {
+                    error_log("SCS_ERROR: El archivo post-type-builder.php NO EXISTE");
+                }
+
+                error_log("SCS_TRACE: Cargando vista post-type-builder.php");
+                include_once SCS_PLUGIN_DIR . 'includes/admin/views/post-type-builder.php';
+            } else {
+                // Vista de listado
+                error_log("SCS_TRACE: Comprobando si el archivo post-types-list.php existe");
+                $list_file = SCS_PLUGIN_DIR . 'includes/admin/views/post-types-list.php';
+                if (file_exists($list_file)) {
+                    error_log("SCS_TRACE: El archivo post-types-list.php EXISTE");
+                } else {
+                    error_log("SCS_ERROR: El archivo post-types-list.php NO EXISTE");
+                }
+
+                error_log("SCS_TRACE: Cargando vista post-types-list.php");
+                include_once SCS_PLUGIN_DIR . 'includes/admin/views/post-types-list.php';
+            }
+
+            error_log('SCS_TRACE: === AdminController::render_post_types_page() FIN ===');
+        } catch (\Throwable $e) {
+            error_log('SCS_FATAL: Error en render_post_types_page: ' . $e->getMessage());
+            error_log('SCS_FATAL: En archivo: ' . $e->getFile() . ' línea ' . $e->getLine());
+            error_log('SCS_FATAL: Trace: ' . $e->getTraceAsString());
+
             echo '<div class="notice notice-error"><p>';
-            echo 'Error loading post type page: ' . esc_html($e->getMessage());
+            echo 'Error al cargar la página. Por favor verifica el log de errores.';
             echo '</p></div>';
-
-            // Log the error for debugging
-            error_log('SEO Content Structure - Error loading post type page: ' . $e->getMessage());
-            error_log('Trace: ' . $e->getTraceAsString());
-        }
-    }
-
-
-    /**
-     * Muestra los tipos de contenido registrados
-     */
-    protected function display_registered_post_types()
-    {
-        // Intentar obtener post types desde la factory primero
-        $registered_post_types = [];
-        try {
-            $post_types = $this->post_type_factory->get_registered_post_types();
-            if (!empty($post_types)) {
-                foreach ($post_types as $post_type) {
-                    $registered_post_types[$post_type->get_post_type()] = [
-                        'singular' => $post_type->get_args()['labels']['singular_name'],
-                        'plural' => $post_type->get_args()['labels']['name'],
-                        'fields' => count($post_type->get_fields()),
-                        'schema' => $post_type->get_schema_type() ?: '-'
-                    ];
-                }
-            }
-        } catch (\Exception $e) {
-            // Si hay error, intentar el método alternativo
-        }
-
-        // Si no hay resultados, intentar con el método alternativo
-        if (empty($registered_post_types)) {
-            $saved_post_types = get_option('scs_registered_post_types', []);
-            foreach ($saved_post_types as $name => $args) {
-                $registered_post_types[$name] = [
-                    'singular' => $args['labels']['singular_name'],
-                    'plural' => $args['labels']['name'],
-                    'fields' => 0,
-                    'schema' => isset($args['schema_type']) ? $args['schema_type'] : '-'
-                ];
-            }
-        }
-
-        // Mostrar la lista si hay tipos de contenido registrados
-        if (!empty($registered_post_types)) {
-            echo '<div class="scs-registered-post-types">';
-            echo '<h3>' . __('Tipos de Contenido Registrados', 'seo-content-structure') . '</h3>';
-
-            echo '<table class="wp-list-table widefat fixed striped">';
-            echo '<thead><tr>';
-            echo '<th>' . __('Nombre', 'seo-content-structure') . '</th>';
-            echo '<th>' . __('Singular', 'seo-content-structure') . '</th>';
-            echo '<th>' . __('Plural', 'seo-content-structure') . '</th>';
-            echo '<th>' . __('Campos', 'seo-content-structure') . '</th>';
-            echo '<th>' . __('Schema', 'seo-content-structure') . '</th>';
-            echo '<th>' . __('Acciones', 'seo-content-structure') . '</th>';
-            echo '</tr></thead>';
-
-            echo '<tbody>';
-            foreach ($registered_post_types as $name => $data) {
-                // No mostrar tipos de contenido nativos
-                if (in_array($name, ['post', 'page', 'attachment'])) {
-                    continue;
-                }
-
-                echo '<tr>';
-                echo '<td>' . esc_html($name) . '</td>';
-                echo '<td>' . esc_html($data['singular']) . '</td>';
-                echo '<td>' . esc_html($data['plural']) . '</td>';
-                echo '<td>' . esc_html($data['fields']) . '</td>';
-                echo '<td>' . esc_html($data['schema']) . '</td>';
-                echo '<td>';
-                echo '<a href="' . admin_url('edit.php?post_type=' . $name) . '" class="button button-small">' . __('Ver entradas', 'seo-content-structure') . '</a> ';
-                echo '<a href="' . admin_url('admin.php?page=scs-post-types&action=edit&post_type=' . $name) . '" class="button button-small">' . __('Editar', 'seo-content-structure') . '</a>';
-                echo '</td>';
-                echo '</tr>';
-            }
-            echo '</tbody>';
-            echo '</table>';
-            echo '</div>';
         }
     }
 
@@ -901,7 +899,7 @@ class AdminController implements Registrable
     {
         // Validar nombre
         if (empty($post_type_name) || !is_string($post_type_name)) {
-            return new WP_Error('invalid_post_type', __('Nombre de tipo de contenido inválido', 'seo-content-structure'));
+            return new WP_Error('invalid_post_type', \__('Nombre de tipo de contenido inválido', 'seo-content-structure'));
         }
 
         // Sanitizar nombre
@@ -909,7 +907,7 @@ class AdminController implements Registrable
 
         // Verificar si ya existe
         if (post_type_exists($post_type_name)) {
-            return new WP_Error('post_type_exists', __('Este tipo de contenido ya existe', 'seo-content-structure'));
+            return new WP_Error('post_type_exists', \__('Este tipo de contenido ya existe', 'seo-content-structure'));
         }
 
         // Establecer etiquetas por defecto si no se proporcionan
@@ -921,15 +919,15 @@ class AdminController implements Registrable
                 'name' => $plural,
                 'singular_name' => $singular,
                 'menu_name' => $plural,
-                'all_items' => __('Todos los', 'seo-content-structure') . ' ' . $plural,
-                'add_new' => __('Añadir nuevo', 'seo-content-structure'),
-                'add_new_item' => __('Añadir nuevo', 'seo-content-structure') . ' ' . $singular,
-                'edit_item' => __('Editar', 'seo-content-structure') . ' ' . $singular,
-                'new_item' => __('Nuevo', 'seo-content-structure') . ' ' . $singular,
-                'view_item' => __('Ver', 'seo-content-structure') . ' ' . $singular,
-                'search_items' => __('Buscar', 'seo-content-structure') . ' ' . $plural,
-                'not_found' => __('No se encontraron', 'seo-content-structure') . ' ' . $plural,
-                'not_found_in_trash' => __('No se encontraron', 'seo-content-structure') . ' ' . $plural . ' en la papelera',
+                'all_items' => \__('Todos los', 'seo-content-structure') . ' ' . $plural,
+                'add_new' => \__('Añadir nuevo', 'seo-content-structure'),
+                'add_new_item' => \__('Añadir nuevo', 'seo-content-structure') . ' ' . $singular,
+                'edit_item' => \__('Editar', 'seo-content-structure') . ' ' . $singular,
+                'new_item' => \__('Nuevo', 'seo-content-structure') . ' ' . $singular,
+                'view_item' => \__('Ver', 'seo-content-structure') . ' ' . $singular,
+                'search_items' => \__('Buscar', 'seo-content-structure') . ' ' . $plural,
+                'not_found' => \__('No se encontraron', 'seo-content-structure') . ' ' . $plural,
+                'not_found_in_trash' => \__('No se encontraron', 'seo-content-structure') . ' ' . $plural . ' en la papelera',
             ];
         }
 
@@ -965,5 +963,129 @@ class AdminController implements Registrable
 
         // Guardar en base de datos para persistencia
         return $this->save_post_type_to_db($post_type_name, $args, $taxonomies, $schema_type);
+    }
+
+    /**
+     * Registra el hook para cargar la página de tipos de contenido
+     */
+    public function register_load_hook()
+    {
+        error_log('SCS_TRACE: === AdminController::register_load_hook() INICIO ===');
+
+        // Verificar si ya se registró el hook para evitar duplicados
+        if (\did_action('load-' . $this->post_types_page_hook)) {
+            error_log('SCS_TRACE: Hook ya registrado para post-types-page, evitando duplicado');
+            return;
+        }
+
+        // Registra el hook para cuando se cargue la página
+        \add_action('load-' . $this->post_types_page_hook, array($this, 'load_post_types_page'));
+
+        error_log('SCS_TRACE: Hook registrado para load-' . $this->post_types_page_hook);
+        error_log('SCS_TRACE: === AdminController::register_load_hook() FIN ===');
+    }
+
+    /**
+     * Callback al cargar la página de tipos de contenido
+     */
+    public function load_post_types_page()
+    {
+        error_log('SCS_TRACE: === AdminController::load_post_types_page() INICIO ===');
+        error_log('SCS_TRACE: $_GET completo = ' . print_r($_GET, true));
+        error_log('SCS_TRACE: post_types_page_hook = ' . $this->post_types_page_hook);
+
+        try {
+            // Crear instancia de factory si no existe
+            if (!$this->post_type_factory) {
+                error_log('SCS_TRACE: Creando instancia de PostTypeFactory');
+                $this->post_type_factory = new \SEOContentStructure\PostTypes\PostTypeFactory();
+            } else {
+                error_log('SCS_TRACE: Factory ya existe');
+            }
+
+            // Verificar si la tabla existe
+            global $wpdb;
+            $table_name = $wpdb->prefix . 'scs_post_types';
+            $table_exists = $wpdb->get_var("SHOW TABLES LIKE '$table_name'") === $table_name;
+            error_log('SCS_TRACE: ¿Tabla scs_post_types existe? ' . ($table_exists ? 'SÍ' : 'NO'));
+
+            // Verificar permisos
+            if (!current_user_can('manage_options')) {
+                error_log('SCS_ERROR: Usuario sin permisos para manage_options');
+                wp_die(\__('No tienes permisos para acceder a esta página.', 'seo-content-structure'));
+            }
+
+            // Verificar si estamos editando o viendo la lista
+            $action = isset($_GET['action']) ? sanitize_text_field($_GET['action']) : 'list';
+            $post_type = isset($_GET['post_type']) ? sanitize_key($_GET['post_type']) : '';
+
+            error_log("SCS_TRACE: Action=$action, post_type=$post_type");
+
+            // Si estamos editando, debemos cargar datos del tipo de contenido
+            if ($action === 'edit' && !empty($post_type)) {
+                error_log("SCS_TRACE: Modo edición para post_type=$post_type");
+
+                // Verificar que el post type existe
+                $post_type_obj = $this->post_type_factory->get_post_type($post_type);
+
+                if (!$post_type_obj) {
+                    error_log("SCS_ERROR: Post type no encontrado para edición: $post_type");
+
+                    // Intentar verificar si existe en la base de datos directamente
+                    global $wpdb;
+                    $table = $wpdb->prefix . 'scs_post_types';
+                    $query = $wpdb->prepare("SELECT * FROM $table WHERE post_type = %s", $post_type);
+                    error_log("SCS_TRACE: Ejecutando query: $query");
+                    $exists_in_db = $wpdb->get_var($query);
+
+                    if ($exists_in_db) {
+                        error_log("SCS_ERROR: Post type existe en BD pero no se pudo cargar en factory");
+                        error_log("SCS_TRACE: Intentando cargar post type directamente desde BD");
+
+                        // Obtener detalles completos
+                        $post_type_data = $wpdb->get_row($query, ARRAY_A);
+                        error_log("SCS_TRACE: Datos desde BD: " . print_r($post_type_data, true));
+                    } else {
+                        error_log("SCS_ERROR: Post type no existe en BD");
+                        // Redirigir con mensaje de error
+                        wp_redirect(add_query_arg(
+                            array('page' => 'scs-post-types', 'error' => urlencode('El tipo de contenido no existe')),
+                            admin_url('admin.php')
+                        ));
+                        exit;
+                    }
+                } else {
+                    error_log("SCS_TRACE: Post type encontrado para edición: " . $post_type_obj->get_post_type());
+                    error_log("SCS_TRACE: Clase del objeto: " . get_class($post_type_obj));
+                    error_log("SCS_TRACE: Datos del post type: " . print_r($post_type_obj, true));
+                }
+            }
+
+            // Configurar acciones específicas
+            $this->setup_post_types_page_actions();
+
+            error_log('SCS_TRACE: === AdminController::load_post_types_page() FIN ===');
+        } catch (\Throwable $e) {
+            error_log('SCS_FATAL: Error en load_post_types_page: ' . $e->getMessage());
+            error_log('SCS_FATAL: Trace: ' . $e->getTraceAsString());
+            wp_die('Ha ocurrido un error al cargar la página. Revisa el log de errores para más detalles.');
+        }
+    }
+
+    /**
+     * Configura acciones específicas para la página de tipos de contenido
+     */
+    public function setup_post_types_page_actions()
+    {
+        error_log('SCS_TRACE: === AdminController::setup_post_types_page_actions() INICIO ===');
+
+        // Agregar scripts específicos para la página de post types
+        \add_action('admin_enqueue_scripts', array($this, 'enqueue_post_types_assets'));
+
+        // Obtener la acción actual para depuración
+        $action = isset($_GET['action']) ? \sanitize_text_field($_GET['action']) : 'list';
+        error_log("SCS_TRACE: setup_post_types_page_actions - Acción: $action");
+
+        error_log('SCS_TRACE: === AdminController::setup_post_types_page_actions() FIN ===');
     }
 }

@@ -12,13 +12,25 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// --- (Código inicial para obtener datos, $post_type_factory, $action, etc. - sin cambios) ---
+// <<<--- LOG INICIO VISTA --- >>>
+error_log('SCS_TRACE: === Vista post-type-builder.php INICIO ===');
+
 // Obtener controlador de tipos de contenido
-$post_type_factory = new \SEOContentStructure\PostTypes\PostTypeFactory();
+try {
+    error_log('SCS_TRACE: Vista - Intentando instanciar PostTypeFactory');
+    $post_type_factory = new \SEOContentStructure\PostTypes\PostTypeFactory();
+    error_log('SCS_TRACE: Vista - PostTypeFactory instanciada correctamente');
+} catch (\Throwable $e) {
+    error_log('SCS_FATAL: Vista - Error al instanciar PostTypeFactory: ' . $e->getMessage());
+    echo '<div class="notice notice-error"><p>' . esc_html__('Error crítico al cargar la factory de tipos de contenido.', 'seo-content-structure') . '</p></div>';
+    return;
+}
 
 // Determinar modo (nuevo o edición)
 $action = isset($_GET['action']) ? sanitize_text_field($_GET['action']) : 'list';
 $post_type = isset($_GET['post_type']) ? sanitize_key($_GET['post_type']) : '';
+
+error_log("SCS_TRACE: Vista - Modo: $action, Post Type: $post_type");
 
 // Por defecto mostramos la lista de tipos de contenido
 $is_edit_mode = ($action === 'edit' && !empty($post_type)) || $action === 'new';
@@ -46,11 +58,19 @@ $post_type_defaults = [
 ];
 
 if ($action === 'edit' && !empty($post_type)) {
+    error_log("SCS_TRACE: Vista - Intentando obtener post type: $post_type");
     $post_type_obj = $post_type_factory->get_post_type($post_type);
 
     if ($post_type_obj) {
+        error_log("SCS_TRACE: Vista - Post type encontrado correctamente en factory");
+
+        // Depurar tipo de objeto
+        error_log("SCS_TRACE: Vista - Clase del objeto recuperado: " . get_class($post_type_obj));
+
         // Fusionar datos guardados con defaults para asegurar que todas las claves existan
         $db_args = $post_type_obj->get_args();
+        error_log("SCS_TRACE: Vista - Args recuperados: " . print_r($db_args, true));
+
         $post_type_data = array(
             'post_type' => $post_type_obj->get_post_type(),
             // Asegurar que los booleanos se carguen correctamente
@@ -59,6 +79,7 @@ if ($action === 'edit' && !empty($post_type)) {
             'fields' => $post_type_obj->get_fields(),
             'schema_type' => $post_type_obj->get_schema_type()
         );
+
         // Forzar booleanos correctos desde $db_args si existen
         foreach (['public', 'show_ui', 'show_in_menu', 'has_archive', 'hierarchical', 'show_in_rest', 'active'] as $bool_key) {
             if (isset($db_args[$bool_key])) {
@@ -75,32 +96,117 @@ if ($action === 'edit' && !empty($post_type)) {
             $post_type_data['args']['labels'] = $db_args['labels'];
         }
     } else {
+        error_log("SCS_ERROR: Vista - Post type NO encontrado en factory: $post_type");
+
+        // Intentar buscar en la base de datos directamente
+        global $wpdb;
+        $table = $wpdb->prefix . 'scs_post_types';
+        $query = $wpdb->prepare("SELECT * FROM $table WHERE post_type = %s", $post_type);
+        $result = $wpdb->get_row($query, ARRAY_A);
+
+        if ($result) {
+            error_log("SCS_TRACE: Vista - Post type encontrado en DB pero no en factory. ID: " . $result['id']);
+
+            // Procesar datos desde DB
+            $config = isset($result['config']) ? $result['config'] : '';
+            if (!empty($config)) {
+                // Intentar deserializar
+                $config_data = maybe_unserialize($config);
+
+                // Intentar JSON si es string
+                if (is_string($config_data)) {
+                    $json_data = json_decode($config_data, true);
+                    if (json_last_error() === JSON_ERROR_NONE) {
+                        $config_data = $json_data;
+                    } else {
+                        $unserialized = @unserialize($config_data);
+                        if ($unserialized !== false || $config_data === 'b:0;') {
+                            $config_data = $unserialized;
+                        }
+                    }
+                }
+
+                error_log("SCS_TRACE: Vista - Config procesado desde DB: " . print_r($config_data, true));
+
+                if (is_array($config_data)) {
+                    $post_type_data = [
+                        'post_type' => $post_type,
+                        'args' => isset($config_data['args']) && is_array($config_data['args'])
+                            ? $config_data['args']
+                            : $post_type_defaults['args'],
+                        'taxonomies' => isset($config_data['taxonomies']) && is_array($config_data['taxonomies'])
+                            ? $config_data['taxonomies']
+                            : [],
+                        'fields' => isset($config_data['fields']) && is_array($config_data['fields'])
+                            ? $config_data['fields']
+                            : [],
+                        'schema_type' => isset($config_data['schema_type']) ? $config_data['schema_type'] : ''
+                    ];
+
+                    // Asegurar active desde BD
+                    $post_type_data['args']['active'] = isset($result['active']) ? (bool)$result['active'] : true;
+
+                    error_log("SCS_TRACE: Vista - Datos preparados desde DB para edición");
+                }
+            }
+        } else {
+            error_log("SCS_ERROR: Vista - Post type no encontrado en DB ni en factory");
+        }
+
         // Si no se pudo cargar el objeto (ej. error en DB), usar defaults
-        $post_type_data = $post_type_defaults;
-        $post_type_data['post_type'] = $post_type; // Mantener el slug si venía en URL
+        if (empty($post_type_data) || !isset($post_type_data['args']) || !is_array($post_type_data['args'])) {
+            error_log("SCS_ERROR: Vista - Usando defaults porque no se pudo cargar datos");
+            $post_type_data = $post_type_defaults;
+            $post_type_data['post_type'] = $post_type; // Mantener el slug si venía en URL
+        }
     }
 } else if ($action === 'new') {
+    error_log("SCS_TRACE: Vista - Inicializando datos para nuevo post type");
     $post_type_data = $post_type_defaults;
 }
 
+// Verificar que los datos necesarios existen
+error_log("SCS_TRACE: Vista - Verificando estructura de datos de post type");
+if (!isset($post_type_data['args']) || !is_array($post_type_data['args'])) {
+    error_log("SCS_ERROR: Vista - Datos del post type incorrectos, args no es un array o no existe");
+    $post_type_data['args'] = $post_type_defaults['args'];
+}
+if (!isset($post_type_data['args']['labels']) || !is_array($post_type_data['args']['labels'])) {
+    error_log("SCS_ERROR: Vista - Labels no es un array o no existe");
+    $post_type_data['args']['labels'] = $post_type_defaults['args']['labels'];
+}
 
 // Lista de taxonomías disponibles
-$taxonomies = \SEOContentStructure\Utilities\Helper::get_taxonomies(true);
+try {
+    $taxonomies = \SEOContentStructure\Utilities\Helper::get_taxonomies(true);
+} catch (\Throwable $e) {
+    error_log("SCS_ERROR: Vista - Error al cargar taxonomías: " . $e->getMessage());
+    $taxonomies = [];
+}
 
 // Tipos de schema disponibles
-$schema_types = \SEOContentStructure\Utilities\Helper::get_schema_types();
+try {
+    $schema_types = \SEOContentStructure\Utilities\Helper::get_schema_types();
+} catch (\Throwable $e) {
+    error_log("SCS_ERROR: Vista - Error al cargar tipos de schema: " . $e->getMessage());
+    $schema_types = [];
+}
 
 // Tipos de campos disponibles
-$field_types = \SEOContentStructure\Utilities\Helper::get_field_types();
+try {
+    $field_types = \SEOContentStructure\Utilities\Helper::get_field_types();
+} catch (\Throwable $e) {
+    error_log("SCS_ERROR: Vista - Error al cargar tipos de campos: " . $e->getMessage());
+    $field_types = [];
+}
 
 // Verificar si hay mensaje de error
 $error_message = isset($_GET['error']) ? sanitize_text_field(urldecode($_GET['error'])) : '';
 
-
 // Verificar si hay mensaje de éxito
 $success_message = isset($_GET['message']) ? sanitize_text_field($_GET['message']) : '';
 
-// --- (Resto del código para la vista de lista - sin cambios) ---
+error_log("SCS_TRACE: Vista - Iniciando renderizado HTML");
 
 ?>
 <div class="wrap scs-admin-page scs-post-types-page">
@@ -134,6 +240,12 @@ $success_message = isset($_GET['message']) ? sanitize_text_field($_GET['message'
             // Asegurarse de que $registered_post_types es un array antes de usarlo
             $registered_post_types_raw = $post_type_factory->get_registered_post_types();
             $registered_post_types = is_array($registered_post_types_raw) ? $registered_post_types_raw : [];
+
+            // Depurar post types registrados
+            error_log("SCS_TRACE: Vista - Total post types registrados: " . count($registered_post_types));
+            foreach ($registered_post_types as $pt_key => $pt_obj) {
+                error_log("SCS_TRACE: Vista - Post type[$pt_key]: " . $pt_obj->get_post_type());
+            }
 
             // Filtrar CPTs nativos para no mostrarlos en la lista editable
             $custom_post_types_only = array_filter($registered_post_types, function ($pt) {

@@ -14,6 +14,17 @@
  * @package SEOContentStructure
  */
 
+// Configuración de depuración para detectar el problema
+if (!defined('WP_DEBUG')) {
+    define('WP_DEBUG', true);
+}
+if (!defined('WP_DEBUG_LOG')) {
+    define('WP_DEBUG_LOG', true);
+}
+if (!defined('WP_DEBUG_DISPLAY')) {
+    define('WP_DEBUG_DISPLAY', false);
+}
+
 // Evitar acceso directo
 if (!defined('ABSPATH')) {
     exit;
@@ -43,6 +54,9 @@ define('SCS_PLUGIN_FILE', __FILE__);
 
 
 spl_autoload_register(function ($class) {
+    // <<<--- LOG INICIO AUTOLOAD --- >>>
+    error_log("SCS_AUTOLOAD: Requesting class: " . $class);
+
     // Prefijo del namespace del plugin
     $prefix = 'SEOContentStructure\\';
 
@@ -104,11 +118,12 @@ spl_autoload_register(function ($class) {
     // Añadir el nombre del archivo
     $file .= $file_name . '.php';
 
-    // Registro de la ruta construida
-    scs_log('Autoloader: Buscando archivo ' . $file . ' para la clase ' . $class);
+    // <<<--- LOG RUTA CALCULADA --- >>>
+    error_log("SCS_AUTOLOAD: Calculated path for $class: " . $file);
 
     // Cargar el archivo si existe
     if (file_exists($file)) {
+        error_log("SCS_AUTOLOAD: File FOUND. Requiring: " . $file);
         require_once $file;
         return;
     }
@@ -125,9 +140,10 @@ spl_autoload_register(function ($class) {
         $file .= $file_name . '.php';
 
         // Registro de la ruta construida
-        scs_log('Autoloader: Buscando archivo ' . $file . ' para la clase ' . $class);
+        error_log("SCS_AUTOLOAD: Trying interface path: " . $file);
 
         if (file_exists($file)) {
+            error_log("SCS_AUTOLOAD: Interface file FOUND. Requiring: " . $file);
             require_once $file;
             return;
         }
@@ -145,16 +161,17 @@ spl_autoload_register(function ($class) {
         $file .= $file_name . '.php';
 
         // Registro de la ruta construida
-        scs_log('Autoloader: Buscando archivo ' . $file . ' para la clase ' . $class);
+        error_log("SCS_AUTOLOAD: Trying abstract class path: " . $file);
 
         if (file_exists($file)) {
+            error_log("SCS_AUTOLOAD: Abstract file FOUND. Requiring: " . $file);
             require_once $file;
             return;
         }
     }
 
-    // Registro de error solo si llegamos a este punto
-    scs_log('Autoloader: No se pudo encontrar el archivo para la clase ' . $class);
+    // <<<--- LOG ERROR AUTOLOAD --- >>>
+    error_log("SCS_AUTOLOAD_ERROR: File NOT FOUND for class: " . $class . " (Final path checked: " . $file . ")");
 });
 // Cargar el archivo de funciones helper
 require_once SCS_PLUGIN_DIR . 'includes/utilities/functions.php';
@@ -170,34 +187,54 @@ add_action('plugins_loaded', 'scs_init_plugin', 20);
  */
 function scs_init_plugin()
 {
+    // <<<--- LOG INICIO PLUGIN --- >>>
+    error_log('SCS_TRACE: ========= scs_init_plugin() START =========');
+
     // Carga de traducciones
     load_plugin_textdomain('seo-content-structure', false, dirname(SCS_PLUGIN_BASENAME) . '/languages');
 
     // Inicializar el plugin principal
     try {
-        // Verificar que las clases clave existen
-        $core_files = [
-            SCS_PLUGIN_DIR . 'includes/core/class-plugin.php',
-            SCS_PLUGIN_DIR . 'includes/core/class-loader.php'
-        ];
+        // <<<--- LOG ANTES DE INSTANCIAS --- >>>
+        error_log('SCS_TRACE: Intentando crear instancia de Plugin y llamar a init()...');
 
-        foreach ($core_files as $file) {
-            if (!file_exists($file)) {
-                throw new \Exception("Archivo crítico no encontrado: " . $file);
-            }
+        // Verificar que las clases clave existen
+        if (!class_exists('\SEOContentStructure\Core\Plugin')) {
+            error_log('SCS_FATAL: Clase Plugin NO ENCONTRADA en scs_init_plugin');
+            return;
+        }
+        if (!class_exists('\SEOContentStructure\Admin\AdminController')) {
+            error_log('SCS_FATAL: Clase AdminController NO ENCONTRADA en scs_init_plugin');
+            return;
+        }
+        if (!class_exists('\SEOContentStructure\Core\Loader')) {
+            error_log('SCS_FATAL: Clase Loader NO ENCONTRADA en scs_init_plugin');
+            return;
+        }
+        if (!class_exists('\SEOContentStructure\PostTypes\PostTypeFactory')) {
+            error_log('SCS_FATAL: Clase PostTypeFactory NO ENCONTRADA en scs_init_plugin');
+            return;
         }
 
         // Inicializar el gestor de post types
         $post_type_manager = new \SEOContentStructure\Admin\PostTypeManager();
+        error_log('SCS_TRACE: Instancia de PostTypeManager creada.');
 
         // Crear instancia del plugin principal
         $plugin = new \SEOContentStructure\Core\Plugin();
+        error_log('SCS_TRACE: Instancia de Plugin creada correctamente.');
 
+        error_log('SCS_TRACE: Llamando al método init() de Plugin...');
         $plugin->init();
+        error_log('SCS_TRACE: Llamada a Plugin->init() completada.');
     } catch (\Throwable $e) {
         // Registrar el error
         scs_log('ERROR: ' . $e->getMessage());
         scs_log('Traza: ' . $e->getTraceAsString());
+
+        // <<<--- LOG ERROR INIT --- >>>
+        error_log("SCS_FATAL: Excepción en scs_init_plugin(): " . $e->getMessage());
+        error_log("SCS_FATAL: Traza de la excepción: " . $e->getTraceAsString());
 
         // Show admin notice
         add_action('admin_notices', function () use ($e) {
